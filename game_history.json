@@ -1,0 +1,23 @@
+[
+  {
+    "player_name": "Player1",
+    "guesses": 3,
+    "time_taken": 10.5,
+    "timestamp": "2026-01-24T05:05:43.897724",
+    "date_display": "2026-01-24 05:05:43"
+  },
+  {
+    "player_name": "Player2",
+    "guesses": 5,
+    "time_taken": 15.2,
+    "timestamp": "2026-01-24T05:05:43.898332",
+    "date_display": "2026-01-24 05:05:43"
+  },
+  {
+    "player_name": "Player3",
+    "guesses": 3,
+    "time_taken": 8.7,
+    "timestamp": "2026-01-24T05:05:43.898686",
+    "date_display": "2026-01-24 05:05:43"
+  }
+]
