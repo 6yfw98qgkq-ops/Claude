@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Swing Analysis Dashboard - Rapsodo MLM 2</title>
+    <link rel="stylesheet" href="golf-dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Golf Swing Analysis Dashboard</h1>
+            <p class="subtitle">Rapsodo MLM 2 Data Analyzer</p>
+        </header>
+
+        <section class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </div>
+                <p>Drag & drop your CSV files here or <label for="fileInput" class="file-label">browse</label></p>
+                <p class="upload-hint">Supports multiple files for multi-day analysis</p>
+                <input type="file" id="fileInput" accept=".csv" multiple hidden>
+            </div>
+            <div class="file-list" id="fileList"></div>
+        </section>
+
+        <section class="controls-section" id="controlsSection" style="display: none;">
+            <div class="control-group">
+                <label for="clubSelect">Select Club:</label>
+                <select id="clubSelect" multiple>
+                    <option value="all" selected>All Clubs</option>
+                </select>
+                <p class="control-hint">Hold Ctrl/Cmd to select multiple clubs</p>
+            </div>
+
+            <div class="control-group">
+                <label>Select Metrics to Plot:</label>
+                <div class="metrics-grid" id="metricsGrid">
+                    <!-- Metrics checkboxes will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="chartType">Chart Type:</label>
+                <select id="chartType">
+                    <option value="line">Line Chart</option>
+                    <option value="scatter">Scatter Plot</option>
+                    <option value="bar">Bar Chart</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="xAxisSelect">X-Axis:</label>
+                <select id="xAxisSelect">
+                    <option value="shot">Shot Number</option>
+                    <option value="date">Date/Session</option>
+                </select>
+            </div>
+
+            <div class="action-buttons">
+                <button id="updateChart" class="btn btn-primary">Update Chart</button>
+                <button id="resetZoom" class="btn btn-secondary">Reset Zoom</button>
+                <button id="clearData" class="btn btn-danger">Clear All Data</button>
+            </div>
+        </section>
+
+        <section class="chart-section" id="chartSection" style="display: none;">
+            <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </section>
+
+        <section class="stats-section" id="statsSection" style="display: none;">
+            <h2>Statistics Summary</h2>
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats will be populated dynamically -->
+            </div>
+        </section>
+
+        <section class="data-table-section" id="dataTableSection" style="display: none;">
+            <div class="table-header">
+                <h2>Raw Data</h2>
+                <div class="table-controls">
+                    <input type="text" id="tableSearch" placeholder="Search data...">
+                    <button id="exportData" class="btn btn-secondary">Export Filtered Data</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="dataTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </section>
+
+        <footer class="dashboard-footer">
+            <p>Golf Swing Analysis Dashboard | Data from Rapsodo MLM 2</p>
+        </footer>
+    </div>
+
+    <script src="golf-dashboard.js"></script>
+</body>
+</html>
