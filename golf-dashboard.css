@@ -168,6 +168,53 @@ body {
     margin-top: 5px;
 }
 
+/* Club Filter Grid */
+.club-filter-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.club-item {
+    background: var(--background-input);
+    padding: 10px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.club-item:hover {
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.club-item.selected {
+    border-color: var(--primary-color);
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.club-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
+}
+
+.club-item label {
+    cursor: pointer;
+    margin-bottom: 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.club-item .club-count {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
 select, input[type="text"] {
     background: var(--background-input);
     border: 1px solid var(--border-color);

@@ -66,7 +66,7 @@ const elements = {
     fileInput: document.getElementById('fileInput'),
     fileList: document.getElementById('fileList'),
     controlsSection: document.getElementById('controlsSection'),
-    clubSelect: document.getElementById('clubSelect'),
+    clubFilterGrid: document.getElementById('clubFilterGrid'),
     metricsGrid: document.getElementById('metricsGrid'),
     chartType: document.getElementById('chartType'),
     xAxisSelect: document.getElementById('xAxisSelect'),
@@ -97,7 +97,6 @@ function setupEventListeners() {
     elements.updateChart.addEventListener('click', updateChart);
     elements.resetZoom.addEventListener('click', resetChartZoom);
     elements.clearData.addEventListener('click', clearAllData);
-    elements.clubSelect.addEventListener('change', handleClubSelection);
     elements.tableSearch.addEventListener('input', handleTableSearch);
     elements.exportData.addEventListener('click', exportFilteredData);
     elements.chartType.addEventListener('change', updateChart);
@@ -251,15 +250,43 @@ function removeFile(index) {
     }
 }
 
-// Populate club select dropdown
+// Populate club filter checkboxes
 function populateClubSelect() {
     const clubs = [...new Set(state.rawData.map(row => row['Club Type']).filter(Boolean))];
     clubs.sort();
 
-    elements.clubSelect.innerHTML = `
-        <option value="all" selected>All Clubs</option>
-        ${clubs.map(club => `<option value="${club}">${club.toUpperCase()}</option>`).join('')}
+    const allChecked = state.selectedClubs.includes('all');
+
+    elements.clubFilterGrid.innerHTML = `
+        <div class="club-item ${allChecked ? 'selected' : ''}" data-club="all">
+            <input type="checkbox" id="club_all" ${allChecked ? 'checked' : ''} onchange="toggleClub('all')">
+            <label for="club_all">All Clubs</label>
+            <span class="club-count">(${state.rawData.length})</span>
+        </div>
+        ${clubs.map(club => {
+            const count = state.rawData.filter(row => row['Club Type'] === club).length;
+            const isSelected = state.selectedClubs.includes(club);
+            return `
+                <div class="club-item ${isSelected ? 'selected' : ''}" data-club="${club}">
+                    <input type="checkbox" id="club_${club}" ${isSelected ? 'checked' : ''} onchange="toggleClub('${club}')">
+                    <label for="club_${club}">${club.toUpperCase()}</label>
+                    <span class="club-count">(${count})</span>
+                </div>
+            `;
+        }).join('')}
     `;
+
+    // Add click handler for the entire club item
+    document.querySelectorAll('.club-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                const checkbox = item.querySelector('input');
+                checkbox.checked = !checkbox.checked;
+                const club = item.dataset.club;
+                toggleClub(club);
+            }
+        });
+    });
 }
 
 // Populate metrics grid
@@ -322,10 +349,37 @@ function toggleMetric(metric) {
     updateChart();
 }
 
-// Handle club selection
-function handleClubSelection() {
-    const selected = Array.from(elements.clubSelect.selectedOptions).map(opt => opt.value);
-    state.selectedClubs = selected.length > 0 ? selected : ['all'];
+// Toggle club filter
+function toggleClub(club) {
+    if (club === 'all') {
+        // If 'all' is clicked, select only 'all' and deselect others
+        state.selectedClubs = ['all'];
+    } else {
+        // Remove 'all' from selection if it's there
+        state.selectedClubs = state.selectedClubs.filter(c => c !== 'all');
+
+        // Toggle the specific club
+        const index = state.selectedClubs.indexOf(club);
+        if (index > -1) {
+            state.selectedClubs.splice(index, 1);
+        } else {
+            state.selectedClubs.push(club);
+        }
+
+        // If no clubs selected, default to 'all'
+        if (state.selectedClubs.length === 0) {
+            state.selectedClubs = ['all'];
+        }
+    }
+
+    // Update checkbox visual states
+    document.querySelectorAll('.club-item').forEach(item => {
+        const checkbox = item.querySelector('input');
+        const clubValue = item.dataset.club;
+        checkbox.checked = state.selectedClubs.includes(clubValue);
+        item.classList.toggle('selected', checkbox.checked);
+    });
+
     updateChart();
     updateStats();
     updateDataTable();
@@ -798,6 +852,7 @@ function clearAllData() {
 
 // Make functions globally accessible
 window.toggleMetric = toggleMetric;
+window.toggleClub = toggleClub;
 window.removeFile = removeFile;
 window.goToPage = goToPage;
 window.sortTable = sortTable;
