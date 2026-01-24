@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily News Digest</title>
+    <link rel="stylesheet" href="news-digest.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Daily News Digest</h1>
+            <p class="subtitle">Stay informed with curated news from top sources</p>
+        </header>
+
+        <div class="config-section">
+            <div class="api-config">
+                <label for="api-key">NewsAPI Key (get yours at <a href="https://newsapi.org" target="_blank">newsapi.org</a>):</label>
+                <input type="password" id="api-key" placeholder="Enter your API key">
+                <button id="save-api-key">Save API Key</button>
+                <span id="api-status"></span>
+            </div>
+        </div>
+
+        <div class="input-section">
+            <h2>Your News Topics</h2>
+            <p class="help-text">Enter up to 10 topics you want to follow (one per line)</p>
+            <textarea id="topics-input" rows="12" placeholder="Example topics:
+Technology
+Artificial Intelligence
+Climate Change
+Space Exploration
+Cybersecurity
+Healthcare
+Finance
+Politics
+Sports
+Entertainment"></textarea>
+            <button id="fetch-news" class="primary-btn">Get Today's News</button>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Fetching your personalized news digest...</p>
+        </div>
+
+        <div id="results-section" class="results-section hidden">
+            <div class="results-header">
+                <h2>Your Daily News Digest</h2>
+                <p class="update-time"></p>
+            </div>
+            <div id="news-container"></div>
+            <div class="pagination">
+                <button id="prev-page" disabled>Previous</button>
+                <span id="page-info"></span>
+                <button id="next-page" disabled>Next</button>
+            </div>
+        </div>
+
+        <div id="error-message" class="error-message hidden"></div>
+    </div>
+
+    <script src="news-digest.js"></script>
+</body>
+</html>
