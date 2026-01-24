@@ -151,17 +151,87 @@ function processFiles(files) {
     });
 }
 
+// Helper to strip quotes from a string
+function stripQuotes(str) {
+    str = str.trim();
+    if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+        return str.slice(1, -1).trim();
+    }
+    return str;
+}
+
+// Map numeric club codes to readable names (Rapsodo MLM2 format)
+function formatClubType(value) {
+    if (value === null || value === undefined || value === '') return '';
+
+    // If it's already a string like "PW", "5W", "8i", return as-is
+    if (typeof value === 'string' && isNaN(parseFloat(value))) {
+        return value.toUpperCase();
+    }
+
+    // Convert numeric club codes to readable names
+    const num = parseFloat(value);
+    if (isNaN(num)) return String(value).toUpperCase();
+
+    // Common club code mappings
+    const clubMap = {
+        1: 'Driver',
+        2: '3W',
+        3: '5W',
+        4: '7W',
+        5: '4i',
+        6: '5i',
+        7: '6i',
+        8: '7i',
+        9: '8i',
+        10: '9i',
+        11: 'PW',
+        12: 'GW',
+        13: 'SW',
+        14: 'LW'
+    };
+
+    // If we have a mapping, use it; otherwise format as iron number
+    if (clubMap[num]) {
+        return clubMap[num];
+    }
+
+    // For values like 8.0, treat as the iron number
+    if (num >= 1 && num <= 9) {
+        return `${Math.floor(num)}i`;
+    }
+
+    return String(value);
+}
+
 // Parse CSV data
 function parseCSV(content, fileName) {
     const lines = content.trim().split('\n');
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim());
+    // Parse headers and strip quotes
+    const headers = lines[0].split(',').map(h => stripQuotes(h));
     const data = [];
 
-    // Extract date from filename if possible (e.g., "session_2024-01-15.csv")
-    const dateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
-    const fileDate = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+    // Extract date from filename if possible (e.g., "session_2024-01-15.csv" or "mlm2pro_shotexport_080724.csv")
+    let fileDate;
+    const isoDateMatch = fileName.match(/(\d{4}-\d{2}-\d{2})/);
+    const usDateMatch = fileName.match(/(\d{6})\.csv$/); // MMDDYY format like 080724
+
+    if (isoDateMatch) {
+        fileDate = isoDateMatch[1];
+    } else if (usDateMatch) {
+        const dateStr = usDateMatch[1];
+        const month = dateStr.substring(0, 2);
+        const day = dateStr.substring(2, 4);
+        const year = '20' + dateStr.substring(4, 6);
+        fileDate = `${year}-${month}-${day}`;
+    } else {
+        fileDate = new Date().toISOString().split('T')[0];
+    }
+
+    // Columns that should stay as strings (not converted to numbers)
+    const stringColumns = ['Club Type', 'Club Brand', 'Club Model'];
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCSVLine(lines[i]);
@@ -174,10 +244,16 @@ function parseCSV(content, fileName) {
             };
 
             headers.forEach((header, index) => {
-                const value = values[index].trim();
-                // Try to convert to number
-                const numValue = parseFloat(value);
-                row[header] = isNaN(numValue) ? value : numValue;
+                let value = stripQuotes(values[index]);
+
+                // Keep certain columns as strings
+                if (stringColumns.includes(header)) {
+                    row[header] = value;
+                } else {
+                    // Try to convert to number
+                    const numValue = parseFloat(value);
+                    row[header] = isNaN(numValue) ? value : numValue;
+                }
             });
 
             data.push(row);
@@ -252,8 +328,15 @@ function removeFile(index) {
 
 // Populate club filter checkboxes
 function populateClubSelect() {
-    const clubs = [...new Set(state.rawData.map(row => row['Club Type']).filter(Boolean))];
-    clubs.sort();
+    const clubs = [...new Set(state.rawData.map(row => row['Club Type']).filter(v => v !== null && v !== undefined && v !== ''))];
+
+    // Sort clubs - try numeric sort first, then alphabetic
+    clubs.sort((a, b) => {
+        const aNum = parseFloat(a);
+        const bNum = parseFloat(b);
+        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+        return String(a).localeCompare(String(b));
+    });
 
     const allChecked = state.selectedClubs.includes('all');
 
@@ -265,11 +348,13 @@ function populateClubSelect() {
         </div>
         ${clubs.map(club => {
             const count = state.rawData.filter(row => row['Club Type'] === club).length;
-            const isSelected = state.selectedClubs.includes(club);
+            const isSelected = state.selectedClubs.includes(String(club));
+            const displayName = formatClubType(club);
+            const safeId = String(club).replace(/[^a-zA-Z0-9]/g, '_');
             return `
                 <div class="club-item ${isSelected ? 'selected' : ''}" data-club="${club}">
-                    <input type="checkbox" id="club_${club}" ${isSelected ? 'checked' : ''} onchange="toggleClub('${club}')">
-                    <label for="club_${club}">${club.toUpperCase()}</label>
+                    <input type="checkbox" id="club_${safeId}" ${isSelected ? 'checked' : ''} onchange="toggleClub('${club}')">
+                    <label for="club_${safeId}">${displayName}</label>
                     <span class="club-count">(${count})</span>
                 </div>
             `;
@@ -671,13 +756,14 @@ function updateDataTable() {
     // Get display columns (exclude internal columns)
     const columns = Object.keys(data[0]).filter(key => !key.startsWith('_'));
 
-    // Render table header
+    // Render table header (strip any remaining quotes from display)
     elements.tableHead.innerHTML = `
         <tr>
             <th onclick="sortTable('_shotNumber')" class="${state.sortColumn === '_shotNumber' ? 'sorted-' + state.sortDirection : ''}">#</th>
-            ${columns.map(col => `
-                <th onclick="sortTable('${col}')" class="${state.sortColumn === col ? 'sorted-' + state.sortDirection : ''}">${col}</th>
-            `).join('')}
+            ${columns.map(col => {
+                const displayName = stripQuotes(col);
+                return `<th onclick="sortTable('${col}')" class="${state.sortColumn === col ? 'sorted-' + state.sortDirection : ''}">${displayName}</th>`;
+            }).join('')}
         </tr>
     `;
 
@@ -698,11 +784,17 @@ function renderTablePage() {
             <td>${row._shotNumber}</td>
             ${columns.map(col => {
                 const value = row[col];
-                const config = metricConfig[col] || {};
+                const config = metricConfig[stripQuotes(col)] || {};
+
+                // Format Club Type specially
+                if (col === 'Club Type' || stripQuotes(col) === 'Club Type') {
+                    return `<td>${formatClubType(value)}</td>`;
+                }
+
                 if (typeof value === 'number') {
                     return `<td>${value.toFixed(config.decimals || 1)}</td>`;
                 }
-                return `<td>${value}</td>`;
+                return `<td>${value !== null && value !== undefined ? value : ''}</td>`;
             }).join('')}
         </tr>
     `).join('');
