@@ -1111,3 +1111,126 @@ body.mobile-view .dashboard-footer {
     padding: 20px;
     text-align: center;
 }
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.loading-overlay.hidden {
+    display: none;
+}
+
+.loading-content {
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+.loading-message {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+/* Date Range Filter */
+.date-range-filter {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    justify-content: space-between;
+}
+
+.date-range-filter .control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.date-range-filter .control-group label {
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.date-range-select {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 160px;
+    transition: all 0.3s;
+}
+
+.date-range-select:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.date-range-select:focus {
+    outline: none;
+    border-color: white;
+}
+
+.date-range-select option {
+    background: var(--background-card);
+    color: var(--text-primary);
+}
+
+.date-range-info {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.95rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 16px;
+    border-radius: 20px;
+}
+
+/* Mobile styles for date range filter */
+body.mobile-view .date-range-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 15px;
+}
+
+body.mobile-view .date-range-filter .control-group {
+    justify-content: space-between;
+}
+
+body.mobile-view .date-range-select {
+    flex: 1;
+    min-width: 120px;
+}
+
+body.mobile-view .date-range-info {
+    text-align: center;
+    font-size: 0.85rem;
+}

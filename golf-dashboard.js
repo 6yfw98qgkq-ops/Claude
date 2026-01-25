@@ -7,6 +7,7 @@ const state = {
     files: [],
     selectedMetrics: [],
     selectedClubs: ['all'],
+    dateRangeFilter: 'all', // '1month', '3months', '6months', '1year', 'all'
     chart: null,
     currentPage: 1,
     rowsPerPage: 25,
@@ -15,7 +16,8 @@ const state = {
     movingAverageWindow: 5,
     showMovingAverage: false,
     winsorize: false,
-    winsorizePercent: 5
+    winsorizePercent: 5,
+    isAutoLoading: false
 };
 
 // Club ordering by typical distance (longest to shortest)
@@ -106,6 +108,10 @@ const elements = {
     storedTab: document.getElementById('storedTab'),
     storedFilesList: document.getElementById('storedFilesList'),
     refreshStoredFiles: document.getElementById('refreshStoredFiles'),
+    // Date range filter
+    dateRangeSelect: document.getElementById('dateRangeSelect'),
+    // Loading indicator
+    loadingOverlay: document.getElementById('loadingOverlay'),
     // Original elements
     uploadArea: document.getElementById('uploadArea'),
     fileInput: document.getElementById('fileInput'),
@@ -199,7 +205,14 @@ async function loadStoredFilesList() {
 
         if (response.ok) {
             const manifest = await response.json();
-            displayStoredFiles(manifest.files || []);
+            const files = manifest.files || [];
+            displayStoredFiles(files);
+
+            // Auto-load all files on startup (skip sample data)
+            const dataFiles = files.filter(f => !f.name.toLowerCase().includes('sample'));
+            if (dataFiles.length > 0 && state.rawData.length === 0) {
+                await loadAllStoredFiles(dataFiles);
+            }
         } else {
             // No manifest found - show instructions
             elements.storedFilesList.innerHTML = `
@@ -219,6 +232,77 @@ async function loadStoredFilesList() {
                 <p style="font-size: 0.85rem; margin-top: 10px;">Use the Upload tab to load local files.</p>
             </div>
         `;
+    }
+}
+
+// Load all stored files automatically
+async function loadAllStoredFiles(files) {
+    state.isAutoLoading = true;
+    showLoadingOverlay(`Loading ${files.length} data files...`);
+
+    let loadedCount = 0;
+
+    for (const file of files) {
+        try {
+            const url = getBaseUrl() + file.path;
+            const response = await fetch(url);
+
+            if (!response.ok) continue;
+
+            const content = await response.text();
+            const fileName = file.path.split('/').pop();
+            const data = parseCSV(content, fileName);
+
+            if (data.length > 0) {
+                state.files.push({
+                    name: fileName,
+                    rows: data.length
+                });
+                state.rawData = state.rawData.concat(data);
+                loadedCount++;
+
+                // Update loading message
+                updateLoadingOverlay(`Loading data files... (${loadedCount}/${files.length})`);
+            }
+
+            // Mark button as loaded if it exists
+            const btn = document.querySelector(`[data-file="${file.path}"]`);
+            if (btn) {
+                btn.classList.add('loaded');
+                btn.textContent = file.name + ' ✓';
+            }
+        } catch (error) {
+            console.error('Error loading file:', file.path, error);
+        }
+    }
+
+    hideLoadingOverlay();
+    state.isAutoLoading = false;
+
+    if (state.rawData.length > 0) {
+        updateUI();
+    }
+}
+
+// Show loading overlay
+function showLoadingOverlay(message) {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.querySelector('.loading-message').textContent = message;
+        elements.loadingOverlay.classList.remove('hidden');
+    }
+}
+
+// Update loading overlay message
+function updateLoadingOverlay(message) {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.querySelector('.loading-message').textContent = message;
+    }
+}
+
+// Hide loading overlay
+function hideLoadingOverlay() {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.classList.add('hidden');
     }
 }
 
@@ -311,6 +395,17 @@ function setupEventListeners() {
 
     if (elements.refreshStoredFiles) {
         elements.refreshStoredFiles.addEventListener('click', loadStoredFilesList);
+    }
+
+    // Date range filter
+    if (elements.dateRangeSelect) {
+        elements.dateRangeSelect.addEventListener('change', (e) => {
+            state.dateRangeFilter = e.target.value;
+            updateDateRangeInfo();
+            updateChart();
+            updateStats();
+            updateDataTable();
+        });
     }
 
     elements.fileInput.addEventListener('change', handleFileSelect);
@@ -626,12 +721,33 @@ function parseCSVLine(line) {
 // Update UI after data load
 function updateUI() {
     updateFileList();
+    updateDateRangeInfo();
     populateClubSelect();
     populateMetricsGrid();
     showSections();
     updateStats();
     updateDataTable();
     updateChart();
+}
+
+// Update date range info display
+function updateDateRangeInfo() {
+    const infoEl = document.getElementById('dateRangeInfo');
+    if (!infoEl) return;
+
+    const filteredData = getFilteredData();
+    const dates = filteredData.map(row => row._date).filter(d => d);
+    const uniqueDates = [...new Set(dates)].sort();
+
+    if (uniqueDates.length === 0) {
+        infoEl.textContent = 'No data in selected range';
+        return;
+    }
+
+    const oldest = formatDisplayDate(uniqueDates[0]);
+    const newest = formatDisplayDate(uniqueDates[uniqueDates.length - 1]);
+
+    infoEl.textContent = `${uniqueDates.length} sessions | ${filteredData.length} shots | ${oldest} - ${newest}`;
 }
 
 // Update file list display
@@ -810,14 +926,79 @@ function showSections() {
     elements.dataTableSection.style.display = 'block';
 }
 
-// Get filtered data based on club selection
+// Get filtered data based on club selection and date range
 function getFilteredData() {
-    if (state.selectedClubs.includes('all')) {
-        return state.rawData;
+    let data = state.rawData;
+
+    // Filter by date range first
+    data = filterByDateRange(data);
+
+    // Then filter by club
+    if (!state.selectedClubs.includes('all')) {
+        data = data.filter(row =>
+            state.selectedClubs.includes(row['Club Type'])
+        );
     }
-    return state.rawData.filter(row =>
-        state.selectedClubs.includes(row['Club Type'])
-    );
+
+    return data;
+}
+
+// Filter data by date range
+function filterByDateRange(data) {
+    if (state.dateRangeFilter === 'all') {
+        return data;
+    }
+
+    const now = new Date();
+    let cutoffDate;
+
+    switch (state.dateRangeFilter) {
+        case '1month':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+        case '3months':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+        case '6months':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+        case '1year':
+            cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        default:
+            return data;
+    }
+
+    return data.filter(row => {
+        if (!row._date) return true;
+        const rowDate = new Date(row._date);
+        return rowDate >= cutoffDate;
+    });
+}
+
+// Get date range stats for display
+function getDateRangeStats() {
+    if (state.rawData.length === 0) return null;
+
+    const dates = state.rawData.map(row => row._date).filter(d => d);
+    if (dates.length === 0) return null;
+
+    const uniqueDates = [...new Set(dates)].sort();
+    const oldest = uniqueDates[0];
+    const newest = uniqueDates[uniqueDates.length - 1];
+
+    return {
+        totalSessions: uniqueDates.length,
+        dateRange: `${formatDisplayDate(oldest)} - ${formatDisplayDate(newest)}`,
+        totalShots: state.rawData.length
+    };
+}
+
+// Format date for display
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // Update the chart

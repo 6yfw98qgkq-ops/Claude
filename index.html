@@ -38,6 +38,14 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-message">Loading data files...</p>
+        </div>
+    </div>
+
     <div class="dashboard-container">
         <header class="dashboard-header">
             <h1>Golf Swing Analysis</h1>
@@ -86,6 +94,20 @@
         </section>
 
         <section class="controls-section" id="controlsSection" style="display: none;">
+            <div class="date-range-filter">
+                <div class="control-group">
+                    <label for="dateRangeSelect">Date Range:</label>
+                    <select id="dateRangeSelect" class="date-range-select">
+                        <option value="all">All Data</option>
+                        <option value="1month">Last 1 Month</option>
+                        <option value="3months">Last 3 Months</option>
+                        <option value="6months">Last 6 Months</option>
+                        <option value="1year">Last 1 Year</option>
+                    </select>
+                </div>
+                <div id="dateRangeInfo" class="date-range-info">Loading data...</div>
+            </div>
+
             <div class="control-group">
                 <label>Filter by Club:</label>
                 <div class="club-filter-grid" id="clubFilterGrid">
