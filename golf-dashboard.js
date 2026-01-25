@@ -11,8 +11,34 @@ const state = {
     currentPage: 1,
     rowsPerPage: 25,
     sortColumn: null,
-    sortDirection: 'asc'
+    sortDirection: 'asc',
+    movingAverageWindow: 5,
+    showMovingAverage: false,
+    winsorize: false,
+    winsorizePercent: 5
 };
+
+// Club ordering by typical distance (longest to shortest)
+const clubOrder = [
+    'Driver', 'DR', '1',
+    '3 Wood', '3W', '3-Wood', '2',
+    '5 Wood', '5W', '5-Wood', '3',
+    '7 Wood', '7W', '7-Wood', '4',
+    '3 Hybrid', '3H', '3-Hybrid',
+    '4 Hybrid', '4H', '4-Hybrid',
+    '5 Hybrid', '5H', '5-Hybrid',
+    '3 Iron', '3I', '3i',
+    '4 Iron', '4I', '4i', '5',
+    '5 Iron', '5I', '5i', '6',
+    '6 Iron', '6I', '6i', '7',
+    '7 Iron', '7I', '7i', '8',
+    '8 Iron', '8I', '8i', '9',
+    '9 Iron', '9I', '9i', '10',
+    'Pitching Wedge', 'PW', '11',
+    'Gap Wedge', 'GW', 'AW', '12',
+    'Sand Wedge', 'SW', '13',
+    'Lob Wedge', 'LW', '14'
+];
 
 // Metric definitions with display names and colors
 const metricConfig = {
@@ -32,32 +58,35 @@ const metricConfig = {
 
 // Club type colors for multi-club visualization
 const clubColors = {
-    'pw': '#4CAF50',
-    'PW': '#4CAF50',
-    '5w': '#2196F3',
-    '5W': '#2196F3',
-    '3w': '#9C27B0',
-    '3W': '#9C27B0',
-    'driver': '#FF9800',
+    // Official names
     'Driver': '#FF9800',
-    'dr': '#FF9800',
-    'DR': '#FF9800',
-    '5i': '#E91E63',
-    '5I': '#E91E63',
-    '6i': '#00BCD4',
-    '6I': '#00BCD4',
-    '7i': '#795548',
-    '7I': '#795548',
-    '8i': '#607D8B',
-    '8I': '#607D8B',
-    '9i': '#FF5722',
-    '9I': '#FF5722',
-    'sw': '#3F51B5',
-    'SW': '#3F51B5',
-    'lw': '#009688',
-    'LW': '#009688',
-    'gw': '#CDDC39',
-    'GW': '#CDDC39'
+    '3 Wood': '#9C27B0',
+    '5 Wood': '#2196F3',
+    '7 Wood': '#00BCD4',
+    '3 Hybrid': '#E91E63',
+    '4 Hybrid': '#FF5722',
+    '5 Hybrid': '#795548',
+    '3 Iron': '#673AB7',
+    '4 Iron': '#3F51B5',
+    '5 Iron': '#2196F3',
+    '6 Iron': '#00BCD4',
+    '7 Iron': '#009688',
+    '8 Iron': '#4CAF50',
+    '9 Iron': '#8BC34A',
+    'Pitching Wedge': '#CDDC39',
+    'Gap Wedge': '#FFC107',
+    'Sand Wedge': '#FF9800',
+    'Lob Wedge': '#FF5722',
+    // Shorthand versions
+    'PW': '#CDDC39',
+    'GW': '#FFC107',
+    'AW': '#FFC107',
+    'SW': '#FF9800',
+    'LW': '#FF5722',
+    '3W': '#9C27B0',
+    '5W': '#2196F3',
+    '7W': '#00BCD4',
+    'DR': '#FF9800'
 };
 
 // DOM Elements
@@ -70,6 +99,10 @@ const elements = {
     metricsGrid: document.getElementById('metricsGrid'),
     chartType: document.getElementById('chartType'),
     xAxisSelect: document.getElementById('xAxisSelect'),
+    showMovingAverage: document.getElementById('showMovingAverage'),
+    movingAverageWindow: document.getElementById('movingAverageWindow'),
+    winsorize: document.getElementById('winsorize'),
+    winsorizePercent: document.getElementById('winsorizePercent'),
     updateChart: document.getElementById('updateChart'),
     resetZoom: document.getElementById('resetZoom'),
     clearData: document.getElementById('clearData'),
@@ -101,6 +134,30 @@ function setupEventListeners() {
     elements.exportData.addEventListener('click', exportFilteredData);
     elements.chartType.addEventListener('change', updateChart);
     elements.xAxisSelect.addEventListener('change', updateChart);
+
+    // Moving average controls
+    elements.showMovingAverage.addEventListener('change', (e) => {
+        state.showMovingAverage = e.target.checked;
+        updateChart();
+    });
+    elements.movingAverageWindow.addEventListener('change', (e) => {
+        state.movingAverageWindow = parseInt(e.target.value) || 5;
+        if (state.showMovingAverage) updateChart();
+    });
+
+    // Winsorization controls
+    elements.winsorize.addEventListener('change', (e) => {
+        state.winsorize = e.target.checked;
+        updateChart();
+        updateStats();
+    });
+    elements.winsorizePercent.addEventListener('change', (e) => {
+        state.winsorizePercent = parseInt(e.target.value) || 5;
+        if (state.winsorize) {
+            updateChart();
+            updateStats();
+        }
+    });
 }
 
 // Setup drag and drop functionality
@@ -164,44 +221,137 @@ function stripQuotes(str) {
 function formatClubType(value) {
     if (value === null || value === undefined || value === '') return '';
 
-    // If it's already a string like "PW", "5W", "8i", return as-is
-    if (typeof value === 'string' && isNaN(parseFloat(value))) {
-        return value.toUpperCase();
-    }
-
-    // Convert numeric club codes to readable names
-    const num = parseFloat(value);
-    if (isNaN(num)) return String(value).toUpperCase();
-
-    // Common club code mappings
+    // Common club code mappings to official golf names
     const clubMap = {
-        1: 'Driver',
-        2: '3W',
-        3: '5W',
-        4: '7W',
-        5: '4i',
-        6: '5i',
-        7: '6i',
-        8: '7i',
-        9: '8i',
-        10: '9i',
-        11: 'PW',
-        12: 'GW',
-        13: 'SW',
-        14: 'LW'
+        '1': 'Driver',
+        '2': '3 Wood',
+        '3': '5 Wood',
+        '4': '7 Wood',
+        '5': '4 Iron',
+        '6': '5 Iron',
+        '7': '6 Iron',
+        '8': '7 Iron',
+        '9': '8 Iron',
+        '10': '9 Iron',
+        '11': 'Pitching Wedge',
+        '12': 'Gap Wedge',
+        '13': 'Sand Wedge',
+        '14': 'Lob Wedge',
+        // Also handle decimal versions
+        '1.0': 'Driver',
+        '2.0': '3 Wood',
+        '3.0': '5 Wood',
+        '4.0': '7 Wood',
+        '5.0': '4 Iron',
+        '6.0': '5 Iron',
+        '7.0': '6 Iron',
+        '8.0': '7 Iron',
+        '9.0': '8 Iron',
+        '10.0': '9 Iron',
+        '11.0': 'Pitching Wedge',
+        '12.0': 'Gap Wedge',
+        '13.0': 'Sand Wedge',
+        '14.0': 'Lob Wedge'
     };
 
-    // If we have a mapping, use it; otherwise format as iron number
-    if (clubMap[num]) {
-        return clubMap[num];
+    const strValue = String(value).trim();
+
+    // Check direct mapping first
+    if (clubMap[strValue]) {
+        return clubMap[strValue];
     }
 
-    // For values like 8.0, treat as the iron number
-    if (num >= 1 && num <= 9) {
-        return `${Math.floor(num)}i`;
+    // If it's already a proper name, normalize it
+    const upperValue = strValue.toUpperCase();
+    const nameMap = {
+        'DR': 'Driver',
+        'DRIVER': 'Driver',
+        '3W': '3 Wood',
+        '5W': '5 Wood',
+        '7W': '7 Wood',
+        '3H': '3 Hybrid',
+        '4H': '4 Hybrid',
+        '5H': '5 Hybrid',
+        '3I': '3 Iron',
+        '4I': '4 Iron',
+        '5I': '5 Iron',
+        '6I': '6 Iron',
+        '7I': '7 Iron',
+        '8I': '8 Iron',
+        '9I': '9 Iron',
+        'PW': 'Pitching Wedge',
+        'GW': 'Gap Wedge',
+        'AW': 'Gap Wedge',
+        'SW': 'Sand Wedge',
+        'LW': 'Lob Wedge'
+    };
+
+    if (nameMap[upperValue]) {
+        return nameMap[upperValue];
     }
 
-    return String(value);
+    // Try to parse as number
+    const num = parseFloat(value);
+    if (!isNaN(num) && num >= 1 && num <= 9) {
+        return `${Math.floor(num)} Iron`;
+    }
+
+    return strValue;
+}
+
+// Get club sort order (lower = longer club = first)
+function getClubSortOrder(clubValue) {
+    const formatted = formatClubType(clubValue);
+    const index = clubOrder.findIndex(c =>
+        c.toLowerCase() === formatted.toLowerCase() ||
+        c.toLowerCase() === String(clubValue).toLowerCase()
+    );
+    return index === -1 ? 999 : index;
+}
+
+// Calculate moving average for an array of values
+function calculateMovingAverage(values, windowSize) {
+    const result = [];
+    for (let i = 0; i < values.length; i++) {
+        if (i < windowSize - 1) {
+            // Not enough data points yet, use partial window
+            const slice = values.slice(0, i + 1).filter(v => v !== null && !isNaN(v));
+            result.push(slice.length > 0 ? slice.reduce((a, b) => a + b, 0) / slice.length : null);
+        } else {
+            const slice = values.slice(i - windowSize + 1, i + 1).filter(v => v !== null && !isNaN(v));
+            result.push(slice.length > 0 ? slice.reduce((a, b) => a + b, 0) / slice.length : null);
+        }
+    }
+    return result;
+}
+
+// Winsorize an array of values (clip extreme values to percentiles)
+function winsorizeValues(values, percentile) {
+    const validValues = values.filter(v => v !== null && !isNaN(v));
+    if (validValues.length === 0) return values;
+
+    const sorted = [...validValues].sort((a, b) => a - b);
+    const lowerIdx = Math.floor(sorted.length * (percentile / 100));
+    const upperIdx = Math.ceil(sorted.length * (1 - percentile / 100)) - 1;
+
+    const lowerBound = sorted[Math.max(0, lowerIdx)];
+    const upperBound = sorted[Math.min(sorted.length - 1, upperIdx)];
+
+    return values.map(v => {
+        if (v === null || isNaN(v)) return v;
+        if (v < lowerBound) return lowerBound;
+        if (v > upperBound) return upperBound;
+        return v;
+    });
+}
+
+// Get percentile value from sorted array
+function getPercentile(sortedArr, percentile) {
+    const index = (percentile / 100) * (sortedArr.length - 1);
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    if (lower === upper) return sortedArr[lower];
+    return sortedArr[lower] + (sortedArr[upper] - sortedArr[lower]) * (index - lower);
 }
 
 // Parse CSV data
@@ -330,13 +480,8 @@ function removeFile(index) {
 function populateClubSelect() {
     const clubs = [...new Set(state.rawData.map(row => row['Club Type']).filter(v => v !== null && v !== undefined && v !== ''))];
 
-    // Sort clubs - try numeric sort first, then alphabetic
-    clubs.sort((a, b) => {
-        const aNum = parseFloat(a);
-        const bNum = parseFloat(b);
-        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
-        return String(a).localeCompare(String(b));
-    });
+    // Sort clubs by distance order (Driver first, then woods, irons, wedges)
+    clubs.sort((a, b) => getClubSortOrder(a) - getClubSortOrder(b));
 
     const allChecked = state.selectedClubs.includes('all');
 
@@ -520,7 +665,7 @@ function updateChart() {
         return;
     }
 
-    const datasets = createDatasets(data, xAxis);
+    const datasets = createDatasets(data, xAxis, chartType);
     const labels = xAxis === 'shot'
         ? data.map((_, i) => i + 1)
         : data.map(row => row._date);
@@ -538,7 +683,7 @@ function updateChart() {
 }
 
 // Create datasets for the chart
-function createDatasets(data, xAxis) {
+function createDatasets(data, xAxis, chartType) {
     const datasets = [];
     const groupByClub = !state.selectedClubs.includes('all') && state.selectedClubs.length > 1;
 
@@ -549,20 +694,56 @@ function createDatasets(data, xAxis) {
 
             state.selectedMetrics.forEach(metric => {
                 const config = metricConfig[metric] || { color: '#888' };
-                const clubColor = clubColors[club] || config.color;
+                const clubColor = clubColors[formatClubType(club)] || clubColors[club] || config.color;
 
-                datasets.push({
-                    label: `${club.toUpperCase()} - ${metric}`,
-                    data: xAxis === 'scatter'
-                        ? clubData.map((row, i) => ({ x: i + 1, y: row[metric] }))
-                        : clubData.map(row => row[metric]),
-                    borderColor: clubColor,
-                    backgroundColor: clubColor + '40',
-                    fill: false,
-                    tension: 0.1,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                });
+                let values = clubData.map(row => row[metric]);
+
+                // Apply Winsorization if enabled
+                if (state.winsorize) {
+                    values = winsorizeValues(values, state.winsorizePercent);
+                }
+
+                const displayName = `${formatClubType(club)} - ${metric}`;
+
+                if (chartType === 'scatter') {
+                    datasets.push({
+                        label: displayName,
+                        data: values.map((y, i) => ({ x: i + 1, y: y })),
+                        borderColor: clubColor,
+                        backgroundColor: clubColor + '80',
+                        showLine: false,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    });
+                } else {
+                    datasets.push({
+                        label: displayName,
+                        data: values,
+                        borderColor: clubColor,
+                        backgroundColor: clubColor + '40',
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    });
+
+                    // Add moving average if enabled
+                    if (state.showMovingAverage && chartType === 'line') {
+                        const maValues = calculateMovingAverage(values, state.movingAverageWindow);
+                        datasets.push({
+                            label: `${displayName} (MA-${state.movingAverageWindow})`,
+                            data: maValues,
+                            borderColor: clubColor,
+                            backgroundColor: 'transparent',
+                            borderWidth: 3,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 0
+                        });
+                    }
+                }
             });
         });
     } else {
@@ -570,19 +751,55 @@ function createDatasets(data, xAxis) {
         state.selectedMetrics.forEach((metric, index) => {
             const config = metricConfig[metric] || { color: getDefaultColor(index) };
 
-            datasets.push({
-                label: metric,
-                data: xAxis === 'scatter'
-                    ? data.map((row, i) => ({ x: i + 1, y: row[metric] }))
-                    : data.map(row => row[metric]),
-                borderColor: config.color,
-                backgroundColor: config.color + '40',
-                fill: false,
-                tension: 0.1,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                yAxisID: state.selectedMetrics.length > 1 ? `y${index}` : 'y'
-            });
+            let values = data.map(row => row[metric]);
+
+            // Apply Winsorization if enabled
+            if (state.winsorize) {
+                values = winsorizeValues(values, state.winsorizePercent);
+            }
+
+            if (chartType === 'scatter') {
+                datasets.push({
+                    label: metric,
+                    data: values.map((y, i) => ({ x: i + 1, y: y })),
+                    borderColor: config.color,
+                    backgroundColor: config.color + '80',
+                    showLine: false,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    yAxisID: state.selectedMetrics.length > 1 ? `y${index}` : 'y'
+                });
+            } else {
+                datasets.push({
+                    label: metric,
+                    data: values,
+                    borderColor: config.color,
+                    backgroundColor: config.color + '40',
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    yAxisID: state.selectedMetrics.length > 1 ? `y${index}` : 'y'
+                });
+
+                // Add moving average if enabled
+                if (state.showMovingAverage && chartType === 'line') {
+                    const maValues = calculateMovingAverage(values, state.movingAverageWindow);
+                    datasets.push({
+                        label: `${metric} (MA-${state.movingAverageWindow})`,
+                        data: maValues,
+                        borderColor: config.color,
+                        backgroundColor: 'transparent',
+                        borderWidth: 3,
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        yAxisID: state.selectedMetrics.length > 1 ? `y${index}` : 'y'
+                    });
+                }
+            }
         });
     }
 
@@ -597,12 +814,14 @@ function getDefaultColor(index) {
 
 // Get chart options
 function getChartOptions(xAxis, chartType) {
+    const isScatter = chartType === 'scatter';
+
     const options = {
         responsive: true,
         maintainAspectRatio: false,
         interaction: {
-            mode: 'index',
-            intersect: false
+            mode: isScatter ? 'nearest' : 'index',
+            intersect: isScatter
         },
         plugins: {
             legend: {
@@ -622,8 +841,13 @@ function getChartOptions(xAxis, chartType) {
                 callbacks: {
                     label: function(context) {
                         const metric = context.dataset.label;
-                        const config = metricConfig[metric.split(' - ').pop()] || {};
+                        // Remove MA suffix for config lookup
+                        const baseMetric = metric.replace(/ \(MA-\d+\)$/, '').split(' - ').pop();
+                        const config = metricConfig[baseMetric] || {};
                         const value = context.parsed.y.toFixed(config.decimals || 1);
+                        if (isScatter) {
+                            return `${metric}: Shot ${context.parsed.x}, Value: ${value}${config.unit || ''}`;
+                        }
                         return `${metric}: ${value}${config.unit || ''}`;
                     }
                 }
@@ -642,6 +866,7 @@ function getChartOptions(xAxis, chartType) {
         },
         scales: {
             x: {
+                type: isScatter ? 'linear' : 'category',
                 title: {
                     display: true,
                     text: xAxis === 'shot' ? 'Shot Number' : 'Date/Session',
