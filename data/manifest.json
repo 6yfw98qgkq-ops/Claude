@@ -4,7 +4,87 @@
             "name": "Sample Data",
             "path": "data/sample-golf-data.csv",
             "description": "Sample golf swing data for testing"
+        },
+        {
+            "name": "Session 07/13/24",
+            "path": "data/mlm2pro_shotexport_071324.csv",
+            "description": "Range session July 13, 2024"
+        },
+        {
+            "name": "Session 08/07/24",
+            "path": "data/mlm2pro_shotexport_080724.csv",
+            "description": "Range session August 7, 2024"
+        },
+        {
+            "name": "Session 12/15/24",
+            "path": "data/mlm2pro_shotexport_121524.csv",
+            "description": "Range session December 15, 2024"
+        },
+        {
+            "name": "Session 03/16/25",
+            "path": "data/mlm2pro_shotexport_031625.csv",
+            "description": "Range session March 16, 2025"
+        },
+        {
+            "name": "Session 06/23/25",
+            "path": "data/mlm2pro_shotexport_062325.csv",
+            "description": "Range session June 23, 2025"
+        },
+        {
+            "name": "Session 08/29/25",
+            "path": "data/mlm2pro_shotexport_082925.csv",
+            "description": "Range session August 29, 2025"
+        },
+        {
+            "name": "Session 10/24/25",
+            "path": "data/mlm2pro_shotexport_102425.csv",
+            "description": "Range session October 24, 2025"
+        },
+        {
+            "name": "Session 11/08/25",
+            "path": "data/mlm2pro_shotexport_110825.csv",
+            "description": "Range session November 8, 2025"
+        },
+        {
+            "name": "Session 11/11/25",
+            "path": "data/mlm2pro_shotexport_111125.csv",
+            "description": "Range session November 11, 2025"
+        },
+        {
+            "name": "Session 11/14/25",
+            "path": "data/mlm2pro_shotexport_111425.csv",
+            "description": "Range session November 14, 2025"
+        },
+        {
+            "name": "Session 11/17/25",
+            "path": "data/mlm2pro_shotexport_111725.csv",
+            "description": "Range session November 17, 2025"
+        },
+        {
+            "name": "Session 11/19/25",
+            "path": "data/mlm2pro_shotexport_111925.csv",
+            "description": "Range session November 19, 2025"
+        },
+        {
+            "name": "Session 11/23/25",
+            "path": "data/mlm2pro_shotexport_112325.csv",
+            "description": "Range session November 23, 2025"
+        },
+        {
+            "name": "Session 11/28/25",
+            "path": "data/mlm2pro_shotexport_112825.csv",
+            "description": "Range session November 28, 2025"
+        },
+        {
+            "name": "Session 01/19/26",
+            "path": "data/mlm2pro_shotexport_011926.csv",
+            "description": "Range session January 19, 2026"
+        },
+        {
+            "name": "Session 01/23/26",
+            "path": "data/mlm2pro_shotexport_012326.csv",
+            "description": "Range session January 23, 2026"
         }
     ],
-    "lastUpdated": "2024-01-25"
+    "lastUpdated": "2026-01-25"
 }
