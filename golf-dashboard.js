@@ -89,8 +89,24 @@ const clubColors = {
     'DR': '#FF9800'
 };
 
+// Configuration for stored data
+const DATA_FOLDER = 'data';
+const GITHUB_RAW_BASE = ''; // Will be set dynamically based on current URL
+
 // DOM Elements
 const elements = {
+    // View mode elements
+    viewModeModal: document.getElementById('viewModeModal'),
+    selectDesktop: document.getElementById('selectDesktop'),
+    selectMobile: document.getElementById('selectMobile'),
+    rememberChoice: document.getElementById('rememberChoice'),
+    toggleViewMode: document.getElementById('toggleViewMode'),
+    // Tab elements
+    uploadTab: document.getElementById('uploadTab'),
+    storedTab: document.getElementById('storedTab'),
+    storedFilesList: document.getElementById('storedFilesList'),
+    refreshStoredFiles: document.getElementById('refreshStoredFiles'),
+    // Original elements
     uploadArea: document.getElementById('uploadArea'),
     fileInput: document.getElementById('fileInput'),
     fileList: document.getElementById('fileList'),
@@ -120,12 +136,183 @@ const elements = {
 
 // Initialize the dashboard
 function init() {
+    checkViewModePreference();
     setupEventListeners();
     setupDragAndDrop();
+    setupTabs();
+    loadStoredFilesList();
+}
+
+// Check and apply stored view mode preference
+function checkViewModePreference() {
+    const savedMode = localStorage.getItem('golfDashboardViewMode');
+    if (savedMode) {
+        applyViewMode(savedMode);
+        if (elements.viewModeModal) {
+            elements.viewModeModal.classList.add('hidden');
+        }
+    }
+}
+
+// Apply view mode (desktop or mobile)
+function applyViewMode(mode) {
+    if (mode === 'mobile') {
+        document.body.classList.add('mobile-view');
+        document.body.classList.remove('desktop-view');
+    } else {
+        document.body.classList.add('desktop-view');
+        document.body.classList.remove('mobile-view');
+    }
+}
+
+// Setup tabs for upload/stored data
+function setupTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
+
+            // Update active tab button
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Show corresponding content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        });
+    });
+}
+
+// Load list of stored CSV files from data folder
+async function loadStoredFilesList() {
+    if (!elements.storedFilesList) return;
+
+    elements.storedFilesList.innerHTML = '<p class="loading-text">Checking for stored data...</p>';
+
+    try {
+        // Try to fetch the data folder index
+        // For GitHub Pages, we'll use a manifest file
+        const manifestUrl = getBaseUrl() + 'data/manifest.json';
+        const response = await fetch(manifestUrl);
+
+        if (response.ok) {
+            const manifest = await response.json();
+            displayStoredFiles(manifest.files || []);
+        } else {
+            // No manifest found - show instructions
+            elements.storedFilesList.innerHTML = `
+                <div class="no-data-message">
+                    <p>No stored data found.</p>
+                    <p style="font-size: 0.85rem; margin-top: 10px;">
+                        To store data: add CSV files to the <code>data/</code> folder<br>
+                        and create a <code>manifest.json</code> listing them.
+                    </p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        elements.storedFilesList.innerHTML = `
+            <div class="no-data-message">
+                <p>Could not load stored data.</p>
+                <p style="font-size: 0.85rem; margin-top: 10px;">Use the Upload tab to load local files.</p>
+            </div>
+        `;
+    }
+}
+
+// Get base URL for the application
+function getBaseUrl() {
+    const path = window.location.pathname;
+    const basePath = path.substring(0, path.lastIndexOf('/') + 1);
+    return window.location.origin + basePath;
+}
+
+// Display stored files as buttons
+function displayStoredFiles(files) {
+    if (files.length === 0) {
+        elements.storedFilesList.innerHTML = '<p class="no-data-message">No stored data files found.</p>';
+        return;
+    }
+
+    elements.storedFilesList.innerHTML = files.map(file => `
+        <button class="stored-file-btn" data-file="${file.path}" title="${file.description || file.name}">
+            ${file.name}
+        </button>
+    `).join('');
+
+    // Add click handlers
+    document.querySelectorAll('.stored-file-btn').forEach(btn => {
+        btn.addEventListener('click', () => loadStoredFile(btn.dataset.file, btn));
+    });
+}
+
+// Load a stored CSV file
+async function loadStoredFile(filePath, buttonElement) {
+    try {
+        buttonElement.textContent = 'Loading...';
+        const url = getBaseUrl() + filePath;
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error('File not found');
+
+        const content = await response.text();
+        const fileName = filePath.split('/').pop();
+        const data = parseCSV(content, fileName);
+
+        if (data.length > 0) {
+            state.files.push({
+                name: fileName,
+                rows: data.length
+            });
+            state.rawData = state.rawData.concat(data);
+            updateUI();
+            buttonElement.classList.add('loaded');
+            buttonElement.textContent = fileName + ' ✓';
+        }
+    } catch (error) {
+        buttonElement.textContent = 'Error loading';
+        console.error('Error loading stored file:', error);
+    }
 }
 
 // Setup event listeners
 function setupEventListeners() {
+    // View mode selection
+    if (elements.selectDesktop) {
+        elements.selectDesktop.addEventListener('click', () => {
+            applyViewMode('desktop');
+            if (elements.rememberChoice && elements.rememberChoice.checked) {
+                localStorage.setItem('golfDashboardViewMode', 'desktop');
+            }
+            elements.viewModeModal.classList.add('hidden');
+        });
+    }
+
+    if (elements.selectMobile) {
+        elements.selectMobile.addEventListener('click', () => {
+            applyViewMode('mobile');
+            if (elements.rememberChoice && elements.rememberChoice.checked) {
+                localStorage.setItem('golfDashboardViewMode', 'mobile');
+            }
+            elements.viewModeModal.classList.add('hidden');
+        });
+    }
+
+    if (elements.toggleViewMode) {
+        elements.toggleViewMode.addEventListener('click', () => {
+            const currentMode = document.body.classList.contains('mobile-view') ? 'mobile' : 'desktop';
+            const newMode = currentMode === 'mobile' ? 'desktop' : 'mobile';
+            applyViewMode(newMode);
+            localStorage.setItem('golfDashboardViewMode', newMode);
+        });
+    }
+
+    if (elements.refreshStoredFiles) {
+        elements.refreshStoredFiles.addEventListener('click', loadStoredFilesList);
+    }
+
     elements.fileInput.addEventListener('change', handleFileSelect);
     elements.updateChart.addEventListener('click', updateChart);
     elements.resetZoom.addEventListener('click', resetChartZoom);

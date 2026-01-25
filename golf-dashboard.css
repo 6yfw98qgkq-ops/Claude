@@ -695,3 +695,419 @@ tbody tr:hover {
 .empty-state p {
     font-size: 1.1rem;
 }
+
+/* View Mode Modal */
+.modal {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: var(--background-card);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.modal-content p {
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+}
+
+.view-mode-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.view-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 25px 35px;
+    min-width: 140px;
+}
+
+.view-btn svg {
+    stroke: currentColor;
+}
+
+.remember-choice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.remember-choice input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-color);
+}
+
+/* View Toggle Button in Header */
+.dashboard-header {
+    position: relative;
+}
+
+.btn-icon {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: var(--background-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-icon:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* Tab Navigation */
+.upload-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+    background: var(--background-card);
+    padding: 5px;
+    border-radius: 10px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--background-input);
+}
+
+.tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Stored Data Section */
+.stored-data-section {
+    background: var(--background-card);
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+}
+
+.stored-hint {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.stored-files-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+    min-height: 60px;
+}
+
+.stored-file-btn {
+    background: var(--background-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 0.9rem;
+}
+
+.stored-file-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.stored-file-btn.loaded {
+    background: var(--success-color);
+    border-color: var(--success-color);
+}
+
+/* Control Row */
+.control-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.control-row .control-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+/* Mobile-specific styles */
+body.mobile-view .dashboard-container {
+    padding: 10px;
+}
+
+body.mobile-view .dashboard-header {
+    padding: 20px 10px;
+    margin-bottom: 15px;
+}
+
+body.mobile-view .dashboard-header h1 {
+    font-size: 1.5rem;
+}
+
+body.mobile-view .dashboard-header .subtitle {
+    font-size: 0.9rem;
+}
+
+body.mobile-view .upload-area {
+    padding: 25px 15px;
+}
+
+body.mobile-view .upload-icon svg {
+    width: 36px;
+    height: 36px;
+}
+
+body.mobile-view .controls-section {
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+body.mobile-view .control-group label {
+    font-size: 0.9rem;
+}
+
+body.mobile-view .club-filter-grid {
+    gap: 6px;
+}
+
+body.mobile-view .club-item {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    gap: 6px;
+}
+
+body.mobile-view .club-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+body.mobile-view .club-item label {
+    font-size: 0.85rem;
+}
+
+body.mobile-view .club-item .club-count {
+    font-size: 0.7rem;
+}
+
+body.mobile-view .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+body.mobile-view .metric-item {
+    padding: 8px 10px;
+    gap: 6px;
+}
+
+body.mobile-view .metric-item label {
+    font-size: 0.8rem;
+}
+
+body.mobile-view .control-group-row {
+    flex-direction: column;
+    gap: 15px;
+    padding: 12px;
+}
+
+body.mobile-view .control-group.inline {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+body.mobile-view .checkbox-text {
+    font-size: 0.85rem;
+}
+
+body.mobile-view .input-with-label input[type="number"] {
+    width: 55px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+}
+
+body.mobile-view .action-buttons {
+    gap: 10px;
+}
+
+body.mobile-view .btn {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+}
+
+body.mobile-view .chart-section {
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+body.mobile-view .chart-container {
+    height: 280px;
+}
+
+body.mobile-view .stats-section {
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+body.mobile-view .stats-section h2 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+}
+
+body.mobile-view .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+body.mobile-view .stat-card {
+    padding: 12px;
+}
+
+body.mobile-view .stat-card .stat-label {
+    font-size: 0.7rem;
+}
+
+body.mobile-view .stat-card .stat-value {
+    font-size: 1.3rem;
+}
+
+body.mobile-view .stat-card .stat-detail {
+    font-size: 0.7rem;
+}
+
+body.mobile-view .data-table-section {
+    padding: 15px;
+}
+
+body.mobile-view .table-header h2 {
+    font-size: 1.1rem;
+}
+
+body.mobile-view .table-controls {
+    flex-direction: row;
+    gap: 10px;
+}
+
+body.mobile-view .table-controls input {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+}
+
+body.mobile-view .table-controls .btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+body.mobile-view table {
+    min-width: 600px;
+    font-size: 0.8rem;
+}
+
+body.mobile-view th, body.mobile-view td {
+    padding: 8px 10px;
+}
+
+body.mobile-view .pagination button {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}
+
+body.mobile-view .file-item {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}
+
+body.mobile-view .dashboard-footer {
+    padding: 15px;
+    font-size: 0.8rem;
+}
+
+/* Landscape mode optimizations for mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+    body.mobile-view .chart-container {
+        height: 200px;
+    }
+
+    body.mobile-view .modal-content {
+        padding: 20px;
+    }
+
+    body.mobile-view .view-btn {
+        padding: 15px 25px;
+    }
+}
+
+/* Loading text style */
+.loading-text {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* No data message */
+.no-data-message {
+    color: var(--text-secondary);
+    padding: 20px;
+    text-align: center;
+}

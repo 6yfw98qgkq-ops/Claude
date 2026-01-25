@@ -1,0 +1,10 @@
+{
+    "files": [
+        {
+            "name": "Sample Data",
+            "path": "data/sample-golf-data.csv",
+            "description": "Sample golf swing data for testing"
+        }
+    ],
+    "lastUpdated": "2024-01-25"
+}
