@@ -38,6 +38,14 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-message">Loading data files...</p>
+        </div>
+    </div>
+
     <div class="dashboard-container">
         <header class="dashboard-header">
             <h1>Golf Swing Analysis</h1>
@@ -86,6 +94,20 @@
         </section>
 
         <section class="controls-section" id="controlsSection" style="display: none;">
+            <div class="date-range-filter">
+                <div class="control-group">
+                    <label for="dateRangeSelect">Date Range:</label>
+                    <select id="dateRangeSelect" class="date-range-select">
+                        <option value="all">All Data</option>
+                        <option value="1month">Last 1 Month</option>
+                        <option value="3months">Last 3 Months</option>
+                        <option value="6months">Last 6 Months</option>
+                        <option value="1year">Last 1 Year</option>
+                    </select>
+                </div>
+                <div id="dateRangeInfo" class="date-range-info">Loading data...</div>
+            </div>
+
             <div class="control-group">
                 <label>Filter by Club:</label>
                 <div class="club-filter-grid" id="clubFilterGrid">
@@ -147,6 +169,92 @@
                 <button id="updateChart" class="btn btn-primary">Update Chart</button>
                 <button id="resetZoom" class="btn btn-secondary">Reset Zoom</button>
                 <button id="clearData" class="btn btn-danger">Clear All</button>
+            </div>
+        </section>
+
+        <!-- Session Analysis Section -->
+        <section class="session-analysis-section" id="sessionAnalysisSection" style="display: none;">
+            <div class="section-header">
+                <h2>Session Analysis</h2>
+                <div class="session-controls">
+                    <div class="control-group">
+                        <label for="currentSessionSelect">Current Session:</label>
+                        <select id="currentSessionSelect" class="session-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="comparisonPeriod">Compare Against:</label>
+                        <select id="comparisonPeriod" class="session-select">
+                            <option value="1">Last Session</option>
+                            <option value="5" selected>Last 5 Sessions</option>
+                            <option value="10">Last 10 Sessions</option>
+                            <option value="25">Last 25 Sessions</option>
+                            <option value="all">All Sessions</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Summary Cards -->
+            <div class="session-summary">
+                <div class="summary-card current-session">
+                    <h3>Current Session</h3>
+                    <div id="currentSessionSummary" class="summary-content">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                <div class="summary-card comparison-session">
+                    <h3>Comparison Period</h3>
+                    <div id="comparisonSummary" class="summary-content">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Club-by-Club Analysis -->
+            <div class="club-analysis-container">
+                <h3>Club-by-Club Performance</h3>
+                <div id="clubAnalysisGrid" class="club-analysis-grid">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Consistency Metrics -->
+            <div class="consistency-section">
+                <h3>Consistency Metrics</h3>
+                <div class="consistency-grid" id="consistencyGrid">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Dispersion Analysis -->
+            <div class="dispersion-section">
+                <h3>Dispersion Analysis</h3>
+                <div class="dispersion-container">
+                    <div class="dispersion-chart-container">
+                        <canvas id="dispersionChart"></canvas>
+                    </div>
+                    <div id="dispersionStats" class="dispersion-stats">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shot Quality Metrics -->
+            <div class="quality-section">
+                <h3>Shot Quality Indicators</h3>
+                <div id="qualityMetrics" class="quality-metrics-grid">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Trend Charts -->
+            <div class="trends-section">
+                <h3>Performance Trends</h3>
+                <div class="trends-chart-container">
+                    <canvas id="trendsChart"></canvas>
+                </div>
             </div>
         </section>
 

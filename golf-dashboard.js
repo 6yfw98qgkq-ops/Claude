@@ -7,6 +7,7 @@ const state = {
     files: [],
     selectedMetrics: [],
     selectedClubs: ['all'],
+    dateRangeFilter: 'all', // '1month', '3months', '6months', '1year', 'all'
     chart: null,
     currentPage: 1,
     rowsPerPage: 25,
@@ -15,7 +16,8 @@ const state = {
     movingAverageWindow: 5,
     showMovingAverage: false,
     winsorize: false,
-    winsorizePercent: 5
+    winsorizePercent: 5,
+    isAutoLoading: false
 };
 
 // Club ordering by typical distance (longest to shortest)
@@ -106,6 +108,10 @@ const elements = {
     storedTab: document.getElementById('storedTab'),
     storedFilesList: document.getElementById('storedFilesList'),
     refreshStoredFiles: document.getElementById('refreshStoredFiles'),
+    // Date range filter
+    dateRangeSelect: document.getElementById('dateRangeSelect'),
+    // Loading indicator
+    loadingOverlay: document.getElementById('loadingOverlay'),
     // Original elements
     uploadArea: document.getElementById('uploadArea'),
     fileInput: document.getElementById('fileInput'),
@@ -199,7 +205,14 @@ async function loadStoredFilesList() {
 
         if (response.ok) {
             const manifest = await response.json();
-            displayStoredFiles(manifest.files || []);
+            const files = manifest.files || [];
+            displayStoredFiles(files);
+
+            // Auto-load all files on startup (skip sample data)
+            const dataFiles = files.filter(f => !f.name.toLowerCase().includes('sample'));
+            if (dataFiles.length > 0 && state.rawData.length === 0) {
+                await loadAllStoredFiles(dataFiles);
+            }
         } else {
             // No manifest found - show instructions
             elements.storedFilesList.innerHTML = `
@@ -219,6 +232,77 @@ async function loadStoredFilesList() {
                 <p style="font-size: 0.85rem; margin-top: 10px;">Use the Upload tab to load local files.</p>
             </div>
         `;
+    }
+}
+
+// Load all stored files automatically
+async function loadAllStoredFiles(files) {
+    state.isAutoLoading = true;
+    showLoadingOverlay(`Loading ${files.length} data files...`);
+
+    let loadedCount = 0;
+
+    for (const file of files) {
+        try {
+            const url = getBaseUrl() + file.path;
+            const response = await fetch(url);
+
+            if (!response.ok) continue;
+
+            const content = await response.text();
+            const fileName = file.path.split('/').pop();
+            const data = parseCSV(content, fileName);
+
+            if (data.length > 0) {
+                state.files.push({
+                    name: fileName,
+                    rows: data.length
+                });
+                state.rawData = state.rawData.concat(data);
+                loadedCount++;
+
+                // Update loading message
+                updateLoadingOverlay(`Loading data files... (${loadedCount}/${files.length})`);
+            }
+
+            // Mark button as loaded if it exists
+            const btn = document.querySelector(`[data-file="${file.path}"]`);
+            if (btn) {
+                btn.classList.add('loaded');
+                btn.textContent = file.name + ' ✓';
+            }
+        } catch (error) {
+            console.error('Error loading file:', file.path, error);
+        }
+    }
+
+    hideLoadingOverlay();
+    state.isAutoLoading = false;
+
+    if (state.rawData.length > 0) {
+        updateUI();
+    }
+}
+
+// Show loading overlay
+function showLoadingOverlay(message) {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.querySelector('.loading-message').textContent = message;
+        elements.loadingOverlay.classList.remove('hidden');
+    }
+}
+
+// Update loading overlay message
+function updateLoadingOverlay(message) {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.querySelector('.loading-message').textContent = message;
+    }
+}
+
+// Hide loading overlay
+function hideLoadingOverlay() {
+    if (elements.loadingOverlay) {
+        elements.loadingOverlay.classList.add('hidden');
     }
 }
 
@@ -311,6 +395,17 @@ function setupEventListeners() {
 
     if (elements.refreshStoredFiles) {
         elements.refreshStoredFiles.addEventListener('click', loadStoredFilesList);
+    }
+
+    // Date range filter
+    if (elements.dateRangeSelect) {
+        elements.dateRangeSelect.addEventListener('change', (e) => {
+            state.dateRangeFilter = e.target.value;
+            updateDateRangeInfo();
+            updateChart();
+            updateStats();
+            updateDataTable();
+        });
     }
 
     elements.fileInput.addEventListener('change', handleFileSelect);
@@ -626,12 +721,33 @@ function parseCSVLine(line) {
 // Update UI after data load
 function updateUI() {
     updateFileList();
+    updateDateRangeInfo();
     populateClubSelect();
     populateMetricsGrid();
     showSections();
     updateStats();
     updateDataTable();
     updateChart();
+}
+
+// Update date range info display
+function updateDateRangeInfo() {
+    const infoEl = document.getElementById('dateRangeInfo');
+    if (!infoEl) return;
+
+    const filteredData = getFilteredData();
+    const dates = filteredData.map(row => row._date).filter(d => d);
+    const uniqueDates = [...new Set(dates)].sort();
+
+    if (uniqueDates.length === 0) {
+        infoEl.textContent = 'No data in selected range';
+        return;
+    }
+
+    const oldest = formatDisplayDate(uniqueDates[0]);
+    const newest = formatDisplayDate(uniqueDates[uniqueDates.length - 1]);
+
+    infoEl.textContent = `${uniqueDates.length} sessions | ${filteredData.length} shots | ${oldest} - ${newest}`;
 }
 
 // Update file list display
@@ -810,14 +926,79 @@ function showSections() {
     elements.dataTableSection.style.display = 'block';
 }
 
-// Get filtered data based on club selection
+// Get filtered data based on club selection and date range
 function getFilteredData() {
-    if (state.selectedClubs.includes('all')) {
-        return state.rawData;
+    let data = state.rawData;
+
+    // Filter by date range first
+    data = filterByDateRange(data);
+
+    // Then filter by club
+    if (!state.selectedClubs.includes('all')) {
+        data = data.filter(row =>
+            state.selectedClubs.includes(row['Club Type'])
+        );
     }
-    return state.rawData.filter(row =>
-        state.selectedClubs.includes(row['Club Type'])
-    );
+
+    return data;
+}
+
+// Filter data by date range
+function filterByDateRange(data) {
+    if (state.dateRangeFilter === 'all') {
+        return data;
+    }
+
+    const now = new Date();
+    let cutoffDate;
+
+    switch (state.dateRangeFilter) {
+        case '1month':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+        case '3months':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+        case '6months':
+            cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+        case '1year':
+            cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        default:
+            return data;
+    }
+
+    return data.filter(row => {
+        if (!row._date) return true;
+        const rowDate = new Date(row._date);
+        return rowDate >= cutoffDate;
+    });
+}
+
+// Get date range stats for display
+function getDateRangeStats() {
+    if (state.rawData.length === 0) return null;
+
+    const dates = state.rawData.map(row => row._date).filter(d => d);
+    if (dates.length === 0) return null;
+
+    const uniqueDates = [...new Set(dates)].sort();
+    const oldest = uniqueDates[0];
+    const newest = uniqueDates[uniqueDates.length - 1];
+
+    return {
+        totalSessions: uniqueDates.length,
+        dateRange: `${formatDisplayDate(oldest)} - ${formatDisplayDate(newest)}`,
+        totalShots: state.rawData.length
+    };
+}
+
+// Format date for display
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // Update the chart
@@ -1361,5 +1542,709 @@ window.removeFile = removeFile;
 window.goToPage = goToPage;
 window.sortTable = sortTable;
 
+// ============================================
+// SESSION ANALYSIS FUNCTIONALITY
+// ============================================
+
+// Session Analysis State
+const sessionAnalysisState = {
+    currentSession: null,
+    comparisonPeriod: 5,
+    dispersionChart: null,
+    trendsChart: null
+};
+
+// Session Analysis DOM Elements
+const sessionElements = {
+    sessionAnalysisSection: null,
+    currentSessionSelect: null,
+    comparisonPeriod: null,
+    currentSessionSummary: null,
+    comparisonSummary: null,
+    clubAnalysisGrid: null,
+    consistencyGrid: null,
+    dispersionChart: null,
+    dispersionStats: null,
+    qualityMetrics: null,
+    trendsChart: null
+};
+
+// Initialize Session Analysis DOM Elements
+function initSessionAnalysisElements() {
+    sessionElements.sessionAnalysisSection = document.getElementById('sessionAnalysisSection');
+    sessionElements.currentSessionSelect = document.getElementById('currentSessionSelect');
+    sessionElements.comparisonPeriod = document.getElementById('comparisonPeriod');
+    sessionElements.currentSessionSummary = document.getElementById('currentSessionSummary');
+    sessionElements.comparisonSummary = document.getElementById('comparisonSummary');
+    sessionElements.clubAnalysisGrid = document.getElementById('clubAnalysisGrid');
+    sessionElements.consistencyGrid = document.getElementById('consistencyGrid');
+    sessionElements.dispersionChart = document.getElementById('dispersionChart');
+    sessionElements.dispersionStats = document.getElementById('dispersionStats');
+    sessionElements.qualityMetrics = document.getElementById('qualityMetrics');
+    sessionElements.trendsChart = document.getElementById('trendsChart');
+}
+
+// Setup Session Analysis Event Listeners
+function setupSessionAnalysisListeners() {
+    if (sessionElements.currentSessionSelect) {
+        sessionElements.currentSessionSelect.addEventListener('change', (e) => {
+            sessionAnalysisState.currentSession = e.target.value;
+            updateSessionAnalysis();
+        });
+    }
+
+    if (sessionElements.comparisonPeriod) {
+        sessionElements.comparisonPeriod.addEventListener('change', (e) => {
+            sessionAnalysisState.comparisonPeriod = e.target.value;
+            updateSessionAnalysis();
+        });
+    }
+}
+
+// Get unique sessions from data
+function getUniqueSessions() {
+    const sessions = [...new Set(state.rawData.map(row => row._date))].filter(d => d);
+    return sessions.sort((a, b) => new Date(b) - new Date(a)); // Most recent first
+}
+
+// Populate session select dropdown
+function populateSessionSelect() {
+    if (!sessionElements.currentSessionSelect) return;
+
+    const sessions = getUniqueSessions();
+
+    sessionElements.currentSessionSelect.innerHTML = sessions.map((session, index) => {
+        const displayDate = formatDisplayDate(session);
+        const shotCount = state.rawData.filter(row => row._date === session).length;
+        return `<option value="${session}" ${index === 0 ? 'selected' : ''}>${displayDate} (${shotCount} shots)</option>`;
+    }).join('');
+
+    if (sessions.length > 0) {
+        sessionAnalysisState.currentSession = sessions[0];
+    }
+}
+
+// Get session data for a specific date
+function getSessionData(sessionDate) {
+    return state.rawData.filter(row => row._date === sessionDate);
+}
+
+// Get comparison data based on selected period
+function getComparisonData(currentSessionDate) {
+    const sessions = getUniqueSessions();
+    const currentIndex = sessions.indexOf(currentSessionDate);
+
+    if (currentIndex === -1) return [];
+
+    let comparisonSessions;
+    const period = sessionAnalysisState.comparisonPeriod;
+
+    if (period === 'all') {
+        comparisonSessions = sessions.slice(currentIndex + 1);
+    } else {
+        const numSessions = parseInt(period);
+        comparisonSessions = sessions.slice(currentIndex + 1, currentIndex + 1 + numSessions);
+    }
+
+    return state.rawData.filter(row => comparisonSessions.includes(row._date));
+}
+
+// Calculate standard deviation
+function calculateStdDev(values) {
+    if (values.length < 2) return 0;
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const squareDiffs = values.map(value => Math.pow(value - mean, 2));
+    const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / values.length;
+    return Math.sqrt(avgSquareDiff);
+}
+
+// Calculate metrics for a dataset
+function calculateSessionMetrics(data) {
+    if (data.length === 0) {
+        return {
+            shotCount: 0,
+            avgCarry: 0,
+            avgTotal: 0,
+            avgBallSpeed: 0,
+            avgClubSpeed: 0,
+            avgSmashFactor: 0,
+            avgLaunchAngle: 0,
+            avgSideCarry: 0,
+            avgApex: 0,
+            stdCarry: 0,
+            stdSideCarry: 0,
+            stdBallSpeed: 0,
+            stdLaunchAngle: 0
+        };
+    }
+
+    const carryDistances = data.map(row => row['Carry Distance']).filter(v => !isNaN(v));
+    const totalDistances = data.map(row => row['Total Distance']).filter(v => !isNaN(v));
+    const ballSpeeds = data.map(row => row['Ball Speed']).filter(v => !isNaN(v));
+    const clubSpeeds = data.map(row => row['Club Speed']).filter(v => !isNaN(v));
+    const smashFactors = data.map(row => row['Smash Factor']).filter(v => !isNaN(v));
+    const launchAngles = data.map(row => row['Launch Angle']).filter(v => !isNaN(v));
+    const sideCarries = data.map(row => row['Side Carry']).filter(v => !isNaN(v));
+    const apexValues = data.map(row => row['Apex']).filter(v => !isNaN(v));
+
+    return {
+        shotCount: data.length,
+        avgCarry: carryDistances.length > 0 ? carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length : 0,
+        avgTotal: totalDistances.length > 0 ? totalDistances.reduce((a, b) => a + b, 0) / totalDistances.length : 0,
+        avgBallSpeed: ballSpeeds.length > 0 ? ballSpeeds.reduce((a, b) => a + b, 0) / ballSpeeds.length : 0,
+        avgClubSpeed: clubSpeeds.length > 0 ? clubSpeeds.reduce((a, b) => a + b, 0) / clubSpeeds.length : 0,
+        avgSmashFactor: smashFactors.length > 0 ? smashFactors.reduce((a, b) => a + b, 0) / smashFactors.length : 0,
+        avgLaunchAngle: launchAngles.length > 0 ? launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length : 0,
+        avgSideCarry: sideCarries.length > 0 ? sideCarries.reduce((a, b) => a + b, 0) / sideCarries.length : 0,
+        avgApex: apexValues.length > 0 ? apexValues.reduce((a, b) => a + b, 0) / apexValues.length : 0,
+        stdCarry: calculateStdDev(carryDistances),
+        stdSideCarry: calculateStdDev(sideCarries),
+        stdBallSpeed: calculateStdDev(ballSpeeds),
+        stdLaunchAngle: calculateStdDev(launchAngles),
+        // Absolute side carry for dispersion
+        avgAbsSideCarry: sideCarries.length > 0 ? sideCarries.map(Math.abs).reduce((a, b) => a + b, 0) / sideCarries.length : 0
+    };
+}
+
+// Calculate metrics by club
+function calculateMetricsByClub(data) {
+    const clubs = [...new Set(data.map(row => row['Club Type']).filter(v => v))];
+    const result = {};
+
+    clubs.forEach(club => {
+        const clubData = data.filter(row => row['Club Type'] === club);
+        result[club] = calculateSessionMetrics(clubData);
+        result[club].clubName = formatClubType(club);
+    });
+
+    return result;
+}
+
+// Get consistency rating based on standard deviation
+function getConsistencyRating(stdDev, metric) {
+    const thresholds = {
+        'Carry Distance': { excellent: 5, good: 10, average: 15 },
+        'Side Carry': { excellent: 5, good: 10, average: 15 },
+        'Ball Speed': { excellent: 2, good: 4, average: 6 },
+        'Launch Angle': { excellent: 2, good: 4, average: 6 },
+        'Smash Factor': { excellent: 0.02, good: 0.04, average: 0.06 }
+    };
+
+    const t = thresholds[metric] || { excellent: 5, good: 10, average: 15 };
+
+    if (stdDev <= t.excellent) return { rating: 'excellent', label: 'Excellent' };
+    if (stdDev <= t.good) return { rating: 'good', label: 'Good' };
+    if (stdDev <= t.average) return { rating: 'average', label: 'Average' };
+    return { rating: 'needs-work', label: 'Needs Work' };
+}
+
+// Format comparison change
+function formatComparison(current, comparison, unit = '', lowerIsBetter = false) {
+    if (comparison === 0) return { text: 'N/A', class: 'neutral' };
+
+    const diff = current - comparison;
+    const percentChange = ((diff / comparison) * 100).toFixed(1);
+
+    let isPositive = diff > 0;
+    if (lowerIsBetter) isPositive = !isPositive;
+
+    const arrow = diff > 0 ? '↑' : '↓';
+    const text = `${arrow} ${Math.abs(diff).toFixed(1)}${unit} (${Math.abs(percentChange)}%)`;
+    const cssClass = Math.abs(diff) < 0.5 ? 'neutral' : (isPositive ? 'positive' : 'negative');
+
+    return { text, class: cssClass };
+}
+
+// Update Session Summary Cards
+function updateSessionSummaryCards(currentMetrics, comparisonMetrics) {
+    if (!sessionElements.currentSessionSummary || !sessionElements.comparisonSummary) return;
+
+    sessionElements.currentSessionSummary.innerHTML = `
+        <div class="summary-stat">
+            <div class="stat-value">${currentMetrics.shotCount}</div>
+            <div class="stat-label">Total Shots</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${currentMetrics.avgCarry.toFixed(1)}</div>
+            <div class="stat-label">Avg Carry (yds)</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${currentMetrics.avgSmashFactor.toFixed(2)}</div>
+            <div class="stat-label">Avg Smash Factor</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${currentMetrics.avgAbsSideCarry.toFixed(1)}</div>
+            <div class="stat-label">Avg Dispersion (yds)</div>
+        </div>
+    `;
+
+    const carryComp = formatComparison(currentMetrics.avgCarry, comparisonMetrics.avgCarry, ' yds');
+    const smashComp = formatComparison(currentMetrics.avgSmashFactor, comparisonMetrics.avgSmashFactor);
+    const dispersionComp = formatComparison(currentMetrics.avgAbsSideCarry, comparisonMetrics.avgAbsSideCarry, ' yds', true);
+
+    sessionElements.comparisonSummary.innerHTML = `
+        <div class="summary-stat">
+            <div class="stat-value">${comparisonMetrics.shotCount}</div>
+            <div class="stat-label">Total Shots</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${comparisonMetrics.avgCarry.toFixed(1)}</div>
+            <div class="stat-label">Avg Carry (yds)</div>
+            <div class="metric-comparison ${carryComp.class}">${carryComp.text}</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${comparisonMetrics.avgSmashFactor.toFixed(2)}</div>
+            <div class="stat-label">Avg Smash Factor</div>
+            <div class="metric-comparison ${smashComp.class}">${smashComp.text}</div>
+        </div>
+        <div class="summary-stat">
+            <div class="stat-value">${comparisonMetrics.avgAbsSideCarry.toFixed(1)}</div>
+            <div class="stat-label">Avg Dispersion (yds)</div>
+            <div class="metric-comparison ${dispersionComp.class}">${dispersionComp.text}</div>
+        </div>
+    `;
+}
+
+// Update Club-by-Club Analysis
+function updateClubAnalysis(currentData, comparisonData) {
+    if (!sessionElements.clubAnalysisGrid) return;
+
+    const currentByClub = calculateMetricsByClub(currentData);
+    const comparisonByClub = calculateMetricsByClub(comparisonData);
+
+    // Sort clubs by distance order
+    const clubs = Object.keys(currentByClub).sort((a, b) => getClubSortOrder(a) - getClubSortOrder(b));
+
+    sessionElements.clubAnalysisGrid.innerHTML = clubs.map(club => {
+        const current = currentByClub[club];
+        const comparison = comparisonByClub[club] || { avgCarry: 0, avgAbsSideCarry: 0, avgSmashFactor: 0, stdCarry: 0 };
+
+        const carryComp = formatComparison(current.avgCarry, comparison.avgCarry, '');
+        const dispersionComp = formatComparison(current.avgAbsSideCarry, comparison.avgAbsSideCarry, '', true);
+        const consistencyComp = formatComparison(current.stdCarry, comparison.stdCarry, '', true);
+        const smashComp = formatComparison(current.avgSmashFactor, comparison.avgSmashFactor, '');
+
+        return `
+            <div class="club-card">
+                <div class="club-card-header">
+                    <h4>${current.clubName}</h4>
+                    <span class="shot-count">${current.shotCount} shots</span>
+                </div>
+                <div class="club-metrics">
+                    <div class="club-metric">
+                        <div class="metric-value">${current.avgCarry.toFixed(1)}</div>
+                        <div class="metric-label">Avg Carry (yds)</div>
+                        ${comparison.avgCarry > 0 ? `<div class="metric-comparison ${carryComp.class}">${carryComp.text}</div>` : ''}
+                    </div>
+                    <div class="club-metric">
+                        <div class="metric-value">${current.avgAbsSideCarry.toFixed(1)}</div>
+                        <div class="metric-label">Dispersion (yds)</div>
+                        ${comparison.avgAbsSideCarry > 0 ? `<div class="metric-comparison ${dispersionComp.class}">${dispersionComp.text}</div>` : ''}
+                    </div>
+                    <div class="club-metric">
+                        <div class="metric-value">${current.stdCarry.toFixed(1)}</div>
+                        <div class="metric-label">Distance StdDev</div>
+                        ${comparison.stdCarry > 0 ? `<div class="metric-comparison ${consistencyComp.class}">${consistencyComp.text}</div>` : ''}
+                    </div>
+                    <div class="club-metric">
+                        <div class="metric-value">${current.avgSmashFactor.toFixed(2)}</div>
+                        <div class="metric-label">Smash Factor</div>
+                        ${comparison.avgSmashFactor > 0 ? `<div class="metric-comparison ${smashComp.class}">${smashComp.text}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update Consistency Metrics
+function updateConsistencyMetrics(currentMetrics, comparisonMetrics) {
+    if (!sessionElements.consistencyGrid) return;
+
+    const metrics = [
+        { name: 'Distance Consistency', current: currentMetrics.stdCarry, comparison: comparisonMetrics.stdCarry, metricKey: 'Carry Distance', unit: 'yds', description: 'Lower is better' },
+        { name: 'Lateral Consistency', current: currentMetrics.stdSideCarry, comparison: comparisonMetrics.stdSideCarry, metricKey: 'Side Carry', unit: 'yds', description: 'Side-to-side variation' },
+        { name: 'Ball Speed Consistency', current: currentMetrics.stdBallSpeed, comparison: comparisonMetrics.stdBallSpeed, metricKey: 'Ball Speed', unit: 'mph', description: 'Impact consistency' },
+        { name: 'Launch Angle Consistency', current: currentMetrics.stdLaunchAngle, comparison: comparisonMetrics.stdLaunchAngle, metricKey: 'Launch Angle', unit: '°', description: 'Swing plane consistency' }
+    ];
+
+    sessionElements.consistencyGrid.innerHTML = metrics.map(metric => {
+        const rating = getConsistencyRating(metric.current, metric.metricKey);
+        const comparison = formatComparison(metric.current, metric.comparison, ` ${metric.unit}`, true);
+
+        return `
+            <div class="consistency-card">
+                <div class="consistency-value">${metric.current.toFixed(1)}${metric.unit}</div>
+                <div class="consistency-label">${metric.name}</div>
+                <div class="consistency-detail">${metric.description}</div>
+                <span class="consistency-rating ${rating.rating}">${rating.label}</span>
+                ${metric.comparison > 0 ? `<div class="metric-comparison ${comparison.class}" style="margin-top: 8px;">${comparison.text}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// Update Dispersion Chart
+function updateDispersionChart(currentData, comparisonData) {
+    if (!sessionElements.dispersionChart) return;
+
+    const ctx = sessionElements.dispersionChart.getContext('2d');
+
+    if (sessionAnalysisState.dispersionChart) {
+        sessionAnalysisState.dispersionChart.destroy();
+    }
+
+    // Prepare data for scatter plot
+    const currentPoints = currentData.map(row => ({
+        x: row['Side Carry'] || 0,
+        y: row['Carry Distance'] || 0
+    })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+    const comparisonPoints = comparisonData.map(row => ({
+        x: row['Side Carry'] || 0,
+        y: row['Carry Distance'] || 0
+    })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+    sessionAnalysisState.dispersionChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Current Session',
+                    data: currentPoints,
+                    backgroundColor: 'rgba(76, 175, 80, 0.7)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    pointRadius: 8,
+                    pointHoverRadius: 10
+                },
+                {
+                    label: 'Comparison Period',
+                    data: comparisonPoints,
+                    backgroundColor: 'rgba(33, 150, 243, 0.3)',
+                    borderColor: 'rgba(33, 150, 243, 0.5)',
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#ffffff' }
+                },
+                title: {
+                    display: true,
+                    text: 'Shot Dispersion Pattern',
+                    color: '#ffffff',
+                    font: { size: 14 }
+                },
+                tooltip: {
+                    backgroundColor: '#16213e',
+                    titleColor: '#ffffff',
+                    bodyColor: '#b8b8b8',
+                    callbacks: {
+                        label: function(context) {
+                            return `Carry: ${context.parsed.y.toFixed(1)} yds, Side: ${context.parsed.x.toFixed(1)} yds`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Side Carry (yds) ← Left | Right →',
+                        color: '#b8b8b8'
+                    },
+                    grid: { color: '#2a2a4a' },
+                    ticks: { color: '#b8b8b8' }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Carry Distance (yds)',
+                        color: '#b8b8b8'
+                    },
+                    grid: { color: '#2a2a4a' },
+                    ticks: { color: '#b8b8b8' }
+                }
+            }
+        }
+    });
+
+    // Update dispersion stats
+    const currentMetrics = calculateSessionMetrics(currentData);
+    const comparisonMetrics = calculateSessionMetrics(comparisonData);
+
+    const leftShots = currentData.filter(row => (row['Side Carry'] || 0) < -5).length;
+    const rightShots = currentData.filter(row => (row['Side Carry'] || 0) > 5).length;
+    const straightShots = currentData.length - leftShots - rightShots;
+    const straightPercent = ((straightShots / currentData.length) * 100).toFixed(0);
+
+    sessionElements.dispersionStats.innerHTML = `
+        <div class="dispersion-stat-card">
+            <div class="stat-value">${currentMetrics.avgAbsSideCarry.toFixed(1)} yds</div>
+            <div class="stat-label">Avg Lateral Dispersion</div>
+            ${comparisonMetrics.avgAbsSideCarry > 0 ? `<div class="stat-comparison metric-comparison ${formatComparison(currentMetrics.avgAbsSideCarry, comparisonMetrics.avgAbsSideCarry, ' yds', true).class}">${formatComparison(currentMetrics.avgAbsSideCarry, comparisonMetrics.avgAbsSideCarry, ' yds', true).text}</div>` : ''}
+        </div>
+        <div class="dispersion-stat-card">
+            <div class="stat-value">${currentMetrics.stdCarry.toFixed(1)} yds</div>
+            <div class="stat-label">Distance Variation</div>
+        </div>
+        <div class="dispersion-stat-card">
+            <div class="stat-value">${straightPercent}%</div>
+            <div class="stat-label">Shots Within 5yds</div>
+            <div class="stat-detail" style="font-size: 0.7rem; color: var(--text-secondary);">${straightShots} of ${currentData.length} shots</div>
+        </div>
+        <div class="dispersion-stat-card">
+            <div class="stat-value">${leftShots} / ${rightShots}</div>
+            <div class="stat-label">Left / Right Miss</div>
+        </div>
+    `;
+}
+
+// Update Quality Metrics
+function updateQualityMetrics(currentData, comparisonData) {
+    if (!sessionElements.qualityMetrics) return;
+
+    const currentMetrics = calculateSessionMetrics(currentData);
+    const comparisonMetrics = calculateSessionMetrics(comparisonData);
+
+    // Calculate quality indicators
+    const smashFactorRating = currentMetrics.avgSmashFactor >= 1.45 ? 'excellent' :
+                              currentMetrics.avgSmashFactor >= 1.35 ? 'good' :
+                              currentMetrics.avgSmashFactor >= 1.25 ? 'average' : 'needs-work';
+
+    // Strike quality - based on smash factor consistency
+    const smashStdDev = calculateStdDev(currentData.map(row => row['Smash Factor']).filter(v => !isNaN(v)));
+    const strikeRating = smashStdDev <= 0.04 ? 'excellent' :
+                         smashStdDev <= 0.06 ? 'good' :
+                         smashStdDev <= 0.08 ? 'average' : 'needs-work';
+
+    // Launch consistency
+    const launchRating = currentMetrics.stdLaunchAngle <= 2 ? 'excellent' :
+                         currentMetrics.stdLaunchAngle <= 4 ? 'good' :
+                         currentMetrics.stdLaunchAngle <= 6 ? 'average' : 'needs-work';
+
+    // Overall dispersion rating
+    const dispersionRating = currentMetrics.avgAbsSideCarry <= 8 ? 'excellent' :
+                             currentMetrics.avgAbsSideCarry <= 12 ? 'good' :
+                             currentMetrics.avgAbsSideCarry <= 18 ? 'average' : 'needs-work';
+
+    // Attack angle consistency (for irons, want negative; for driver, want positive)
+    const attackAngles = currentData.map(row => row['Attack Angle']).filter(v => !isNaN(v));
+    const avgAttackAngle = attackAngles.length > 0 ? attackAngles.reduce((a, b) => a + b, 0) / attackAngles.length : 0;
+
+    // Club path consistency
+    const clubPaths = currentData.map(row => row['Club Path']).filter(v => !isNaN(v));
+    const avgClubPath = clubPaths.length > 0 ? clubPaths.reduce((a, b) => a + b, 0) / clubPaths.length : 0;
+    const clubPathStdDev = calculateStdDev(clubPaths);
+
+    const getTrend = (current, comparison, lowerIsBetter = false) => {
+        if (comparison === 0) return { class: 'stable', text: '--' };
+        const diff = current - comparison;
+        const improved = lowerIsBetter ? diff < 0 : diff > 0;
+        if (Math.abs(diff) < 0.5) return { class: 'stable', text: 'Stable' };
+        return improved ? { class: 'up', text: 'Improving' } : { class: 'down', text: 'Declining' };
+    };
+
+    const smashTrend = getTrend(currentMetrics.avgSmashFactor, comparisonMetrics.avgSmashFactor);
+    const dispersionTrend = getTrend(currentMetrics.avgAbsSideCarry, comparisonMetrics.avgAbsSideCarry, true);
+    const consistencyTrend = getTrend(currentMetrics.stdCarry, comparisonMetrics.stdCarry, true);
+
+    sessionElements.qualityMetrics.innerHTML = `
+        <div class="quality-card ${smashFactorRating}">
+            <div class="quality-value">${currentMetrics.avgSmashFactor.toFixed(2)}</div>
+            <div class="quality-label">Smash Factor</div>
+            <span class="quality-trend ${smashTrend.class}">${smashTrend.text}</span>
+        </div>
+        <div class="quality-card ${strikeRating}">
+            <div class="quality-value">${smashStdDev.toFixed(3)}</div>
+            <div class="quality-label">Strike Consistency</div>
+            <span class="quality-trend stable">σ of Smash</span>
+        </div>
+        <div class="quality-card ${launchRating}">
+            <div class="quality-value">${currentMetrics.avgLaunchAngle.toFixed(1)}°</div>
+            <div class="quality-label">Avg Launch Angle</div>
+            <span class="quality-trend stable">±${currentMetrics.stdLaunchAngle.toFixed(1)}°</span>
+        </div>
+        <div class="quality-card ${dispersionRating}">
+            <div class="quality-value">${currentMetrics.avgAbsSideCarry.toFixed(1)}</div>
+            <div class="quality-label">Avg Dispersion (yds)</div>
+            <span class="quality-trend ${dispersionTrend.class}">${dispersionTrend.text}</span>
+        </div>
+        <div class="quality-card average">
+            <div class="quality-value">${avgAttackAngle.toFixed(1)}°</div>
+            <div class="quality-label">Avg Attack Angle</div>
+            <span class="quality-trend stable">AoA</span>
+        </div>
+        <div class="quality-card ${clubPathStdDev <= 2 ? 'excellent' : clubPathStdDev <= 3 ? 'good' : 'average'}">
+            <div class="quality-value">${avgClubPath.toFixed(1)}°</div>
+            <div class="quality-label">Avg Club Path</div>
+            <span class="quality-trend stable">±${clubPathStdDev.toFixed(1)}°</span>
+        </div>
+    `;
+}
+
+// Update Trends Chart
+function updateTrendsChart() {
+    if (!sessionElements.trendsChart) return;
+
+    const ctx = sessionElements.trendsChart.getContext('2d');
+
+    if (sessionAnalysisState.trendsChart) {
+        sessionAnalysisState.trendsChart.destroy();
+    }
+
+    const sessions = getUniqueSessions().reverse(); // Oldest first for trends
+
+    const sessionMetrics = sessions.map(session => {
+        const data = getSessionData(session);
+        return {
+            date: session,
+            ...calculateSessionMetrics(data)
+        };
+    });
+
+    sessionAnalysisState.trendsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sessionMetrics.map(m => formatDisplayDate(m.date)),
+            datasets: [
+                {
+                    label: 'Avg Carry Distance',
+                    data: sessionMetrics.map(m => m.avgCarry),
+                    borderColor: '#4CAF50',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Smash Factor',
+                    data: sessionMetrics.map(m => m.avgSmashFactor),
+                    borderColor: '#FF9800',
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                },
+                {
+                    label: 'Dispersion (yds)',
+                    data: sessionMetrics.map(m => m.avgAbsSideCarry),
+                    borderColor: '#2196F3',
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    yAxisID: 'y2'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#ffffff' }
+                },
+                title: {
+                    display: true,
+                    text: 'Performance Trends Across Sessions',
+                    color: '#ffffff',
+                    font: { size: 14 }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#2a2a4a' },
+                    ticks: {
+                        color: '#b8b8b8',
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Carry Distance (yds)',
+                        color: '#4CAF50'
+                    },
+                    grid: { color: '#2a2a4a' },
+                    ticks: { color: '#4CAF50' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Smash Factor',
+                        color: '#FF9800'
+                    },
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: '#FF9800' },
+                    min: 1.0,
+                    max: 1.5
+                },
+                y2: {
+                    type: 'linear',
+                    display: false,
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+// Main function to update Session Analysis
+function updateSessionAnalysis() {
+    if (!sessionAnalysisState.currentSession || state.rawData.length === 0) return;
+
+    const currentData = getSessionData(sessionAnalysisState.currentSession);
+    const comparisonData = getComparisonData(sessionAnalysisState.currentSession);
+
+    const currentMetrics = calculateSessionMetrics(currentData);
+    const comparisonMetrics = calculateSessionMetrics(comparisonData);
+
+    updateSessionSummaryCards(currentMetrics, comparisonMetrics);
+    updateClubAnalysis(currentData, comparisonData);
+    updateConsistencyMetrics(currentMetrics, comparisonMetrics);
+    updateDispersionChart(currentData, comparisonData);
+    updateQualityMetrics(currentData, comparisonData);
+    updateTrendsChart();
+}
+
+// Show Session Analysis Section
+function showSessionAnalysisSection() {
+    if (sessionElements.sessionAnalysisSection && state.rawData.length > 0) {
+        sessionElements.sessionAnalysisSection.style.display = 'block';
+        populateSessionSelect();
+        updateSessionAnalysis();
+    }
+}
+
+// Override updateUI to include session analysis
+const originalUpdateUI = updateUI;
+function updateUIWithSessionAnalysis() {
+    originalUpdateUI();
+    showSessionAnalysisSection();
+}
+
+// Replace updateUI
+updateUI = updateUIWithSessionAnalysis;
+
 // Initialize on DOM ready
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    initSessionAnalysisElements();
+    setupSessionAnalysisListeners();
+});
