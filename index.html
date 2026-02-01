@@ -206,6 +206,13 @@
                             <option value="all">All Sessions</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label for="analysisClubSelect">Club Filter:</label>
+                        <select id="analysisClubSelect" class="session-select">
+                            <option value="all">All Clubs</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -256,16 +263,7 @@
 
             <!-- Shot Quality Metrics -->
             <div class="quality-section">
-                <div class="section-header-with-filter">
-                    <h3>Shot Quality Indicators</h3>
-                    <div class="club-filter-inline">
-                        <label for="qualityClubSelect">Club:</label>
-                        <select id="qualityClubSelect" class="club-select-inline">
-                            <option value="all">All Clubs</option>
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                </div>
+                <h3>Shot Quality Indicators</h3>
                 <div id="qualityMetrics" class="quality-metrics-grid">
                     <!-- Populated dynamically -->
                 </div>
@@ -273,16 +271,7 @@
 
             <!-- Trend Charts -->
             <div class="trends-section">
-                <div class="section-header-with-filter">
-                    <h3>Performance Trends</h3>
-                    <div class="club-filter-inline">
-                        <label for="trendsClubSelect">Club:</label>
-                        <select id="trendsClubSelect" class="club-select-inline">
-                            <option value="all">All Clubs</option>
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                </div>
+                <h3>Performance Trends</h3>
                 <div class="trends-chart-container">
                     <canvas id="trendsChart"></canvas>
                 </div>
