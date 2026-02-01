@@ -924,6 +924,11 @@ function showSections() {
     elements.chartSection.style.display = 'block';
     elements.statsSection.style.display = 'block';
     elements.dataTableSection.style.display = 'block';
+
+    // Show Session Analysis section if available
+    if (typeof showSessionAnalysisSection === 'function') {
+        showSessionAnalysisSection();
+    }
 }
 
 // Get filtered data based on club selection and date range
@@ -2232,19 +2237,9 @@ function showSessionAnalysisSection() {
     }
 }
 
-// Override updateUI to include session analysis
-const originalUpdateUI = updateUI;
-function updateUIWithSessionAnalysis() {
-    originalUpdateUI();
-    showSessionAnalysisSection();
-}
-
-// Replace updateUI
-updateUI = updateUIWithSessionAnalysis;
-
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-    init();
     initSessionAnalysisElements();
     setupSessionAnalysisListeners();
+    init();
 });
