@@ -172,6 +172,19 @@
             </div>
         </section>
 
+        <section class="chart-section" id="chartSection" style="display: none;">
+            <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </section>
+
+        <section class="stats-section" id="statsSection" style="display: none;">
+            <h2>Statistics Summary</h2>
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats will be populated dynamically -->
+            </div>
+        </section>
+
         <!-- Session Analysis Section -->
         <section class="session-analysis-section" id="sessionAnalysisSection" style="display: none;">
             <div class="section-header">
@@ -243,7 +256,16 @@
 
             <!-- Shot Quality Metrics -->
             <div class="quality-section">
-                <h3>Shot Quality Indicators</h3>
+                <div class="section-header-with-filter">
+                    <h3>Shot Quality Indicators</h3>
+                    <div class="club-filter-inline">
+                        <label for="qualityClubSelect">Club:</label>
+                        <select id="qualityClubSelect" class="club-select-inline">
+                            <option value="all">All Clubs</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
                 <div id="qualityMetrics" class="quality-metrics-grid">
                     <!-- Populated dynamically -->
                 </div>
@@ -251,23 +273,19 @@
 
             <!-- Trend Charts -->
             <div class="trends-section">
-                <h3>Performance Trends</h3>
+                <div class="section-header-with-filter">
+                    <h3>Performance Trends</h3>
+                    <div class="club-filter-inline">
+                        <label for="trendsClubSelect">Club:</label>
+                        <select id="trendsClubSelect" class="club-select-inline">
+                            <option value="all">All Clubs</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
                 <div class="trends-chart-container">
                     <canvas id="trendsChart"></canvas>
                 </div>
-            </div>
-        </section>
-
-        <section class="chart-section" id="chartSection" style="display: none;">
-            <div class="chart-container">
-                <canvas id="mainChart"></canvas>
-            </div>
-        </section>
-
-        <section class="stats-section" id="statsSection" style="display: none;">
-            <h2>Statistics Summary</h2>
-            <div class="stats-grid" id="statsGrid">
-                <!-- Stats will be populated dynamically -->
             </div>
         </section>
 
