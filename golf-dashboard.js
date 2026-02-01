@@ -1557,8 +1557,7 @@ const sessionAnalysisState = {
     comparisonPeriod: 5,
     dispersionChart: null,
     trendsChart: null,
-    qualityClub: 'all',
-    trendsClub: 'all'
+    selectedClub: 'all'
 };
 
 // Session Analysis DOM Elements
@@ -1566,6 +1565,7 @@ const sessionElements = {
     sessionAnalysisSection: null,
     currentSessionSelect: null,
     comparisonPeriod: null,
+    analysisClubSelect: null,
     currentSessionSummary: null,
     comparisonSummary: null,
     clubAnalysisGrid: null,
@@ -1573,9 +1573,7 @@ const sessionElements = {
     dispersionChart: null,
     dispersionStats: null,
     qualityMetrics: null,
-    trendsChart: null,
-    qualityClubSelect: null,
-    trendsClubSelect: null
+    trendsChart: null
 };
 
 // Initialize Session Analysis DOM Elements
@@ -1583,6 +1581,7 @@ function initSessionAnalysisElements() {
     sessionElements.sessionAnalysisSection = document.getElementById('sessionAnalysisSection');
     sessionElements.currentSessionSelect = document.getElementById('currentSessionSelect');
     sessionElements.comparisonPeriod = document.getElementById('comparisonPeriod');
+    sessionElements.analysisClubSelect = document.getElementById('analysisClubSelect');
     sessionElements.currentSessionSummary = document.getElementById('currentSessionSummary');
     sessionElements.comparisonSummary = document.getElementById('comparisonSummary');
     sessionElements.clubAnalysisGrid = document.getElementById('clubAnalysisGrid');
@@ -1591,8 +1590,6 @@ function initSessionAnalysisElements() {
     sessionElements.dispersionStats = document.getElementById('dispersionStats');
     sessionElements.qualityMetrics = document.getElementById('qualityMetrics');
     sessionElements.trendsChart = document.getElementById('trendsChart');
-    sessionElements.qualityClubSelect = document.getElementById('qualityClubSelect');
-    sessionElements.trendsClubSelect = document.getElementById('trendsClubSelect');
 }
 
 // Setup Session Analysis Event Listeners
@@ -1611,19 +1608,22 @@ function setupSessionAnalysisListeners() {
         });
     }
 
-    if (sessionElements.qualityClubSelect) {
-        sessionElements.qualityClubSelect.addEventListener('change', (e) => {
-            sessionAnalysisState.qualityClub = e.target.value;
-            updateQualityMetricsOnly();
+    if (sessionElements.analysisClubSelect) {
+        sessionElements.analysisClubSelect.addEventListener('change', (e) => {
+            sessionAnalysisState.selectedClub = e.target.value;
+            updateFilteredSections();
         });
     }
+}
 
-    if (sessionElements.trendsClubSelect) {
-        sessionElements.trendsClubSelect.addEventListener('change', (e) => {
-            sessionAnalysisState.trendsClub = e.target.value;
-            updateTrendsChartOnly();
-        });
-    }
+// Update sections that are filtered by club (Dispersion, Quality, Trends)
+function updateFilteredSections() {
+    if (!sessionAnalysisState.currentSession) return;
+    const currentData = getSessionData(sessionAnalysisState.currentSession);
+    const comparisonData = getComparisonData(sessionAnalysisState.currentSession);
+    updateDispersionChart(currentData, comparisonData);
+    updateQualityMetrics(currentData, comparisonData);
+    updateTrendsChart();
 }
 
 // Get unique sessions from data
@@ -1649,35 +1649,25 @@ function populateSessionSelect() {
     }
 }
 
-// Populate club select dropdowns for quality and trends
-function populateClubSelects() {
-    const currentData = getSessionData(sessionAnalysisState.currentSession);
-    const clubs = [...new Set(currentData.map(row => row['Club Type']).filter(v => v))];
+// Populate club select dropdown
+function populateClubSelect() {
+    if (!sessionElements.analysisClubSelect) return;
+
+    // Get all unique clubs from ALL data (not just current session)
+    const clubs = [...new Set(state.rawData.map(row => row['Club Type']).filter(v => v))];
     clubs.sort((a, b) => getClubSortOrder(a) - getClubSortOrder(b));
 
     const clubOptions = '<option value="all">All Clubs</option>' +
         clubs.map(club => `<option value="${club}">${formatClubType(club)}</option>`).join('');
 
-    if (sessionElements.qualityClubSelect) {
-        const currentQualityValue = sessionAnalysisState.qualityClub;
-        sessionElements.qualityClubSelect.innerHTML = clubOptions;
-        // Restore selection if still valid
-        if (currentQualityValue !== 'all' && clubs.includes(currentQualityValue)) {
-            sessionElements.qualityClubSelect.value = currentQualityValue;
-        } else {
-            sessionAnalysisState.qualityClub = 'all';
-        }
-    }
+    const currentValue = sessionAnalysisState.selectedClub;
+    sessionElements.analysisClubSelect.innerHTML = clubOptions;
 
-    if (sessionElements.trendsClubSelect) {
-        const currentTrendsValue = sessionAnalysisState.trendsClub;
-        sessionElements.trendsClubSelect.innerHTML = clubOptions;
-        // Restore selection if still valid
-        if (currentTrendsValue !== 'all' && clubs.includes(currentTrendsValue)) {
-            sessionElements.trendsClubSelect.value = currentTrendsValue;
-        } else {
-            sessionAnalysisState.trendsClub = 'all';
-        }
+    // Restore selection if still valid
+    if (currentValue !== 'all' && clubs.includes(currentValue)) {
+        sessionElements.analysisClubSelect.value = currentValue;
+    } else {
+        sessionAnalysisState.selectedClub = 'all';
     }
 }
 
@@ -1941,7 +1931,7 @@ function updateConsistencyMetrics(currentMetrics, comparisonMetrics) {
     }).join('');
 }
 
-// Update Dispersion Chart
+// Update Dispersion Chart (filtered by selected club)
 function updateDispersionChart(currentData, comparisonData) {
     if (!sessionElements.dispersionChart) return;
 
@@ -1951,16 +1941,30 @@ function updateDispersionChart(currentData, comparisonData) {
         sessionAnalysisState.dispersionChart.destroy();
     }
 
+    // Filter by selected club if not "all"
+    const selectedClub = sessionAnalysisState.selectedClub;
+    let filteredCurrentData = currentData;
+    let filteredComparisonData = comparisonData;
+
+    if (selectedClub !== 'all') {
+        filteredCurrentData = currentData.filter(row => row['Club Type'] === selectedClub);
+        filteredComparisonData = comparisonData.filter(row => row['Club Type'] === selectedClub);
+    }
+
     // Prepare data for scatter plot
-    const currentPoints = currentData.map(row => ({
+    const currentPoints = filteredCurrentData.map(row => ({
         x: row['Side Carry'] || 0,
         y: row['Carry Distance'] || 0
     })).filter(p => !isNaN(p.x) && !isNaN(p.y));
 
-    const comparisonPoints = comparisonData.map(row => ({
+    const comparisonPoints = filteredComparisonData.map(row => ({
         x: row['Side Carry'] || 0,
         y: row['Carry Distance'] || 0
     })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+    const chartTitle = selectedClub === 'all'
+        ? 'Shot Dispersion Pattern'
+        : `Shot Dispersion - ${formatClubType(selectedClub)}`;
 
     sessionAnalysisState.dispersionChart = new Chart(ctx, {
         type: 'scatter',
@@ -1994,7 +1998,7 @@ function updateDispersionChart(currentData, comparisonData) {
                 },
                 title: {
                     display: true,
-                    text: 'Shot Dispersion Pattern',
+                    text: chartTitle,
                     color: '#ffffff',
                     font: { size: 14 }
                 },
@@ -2032,14 +2036,19 @@ function updateDispersionChart(currentData, comparisonData) {
         }
     });
 
-    // Update dispersion stats
-    const currentMetrics = calculateSessionMetrics(currentData);
-    const comparisonMetrics = calculateSessionMetrics(comparisonData);
+    // Update dispersion stats (using filtered data)
+    const currentMetrics = calculateSessionMetrics(filteredCurrentData);
+    const comparisonMetrics = calculateSessionMetrics(filteredComparisonData);
 
-    const leftShots = currentData.filter(row => (row['Side Carry'] || 0) < -5).length;
-    const rightShots = currentData.filter(row => (row['Side Carry'] || 0) > 5).length;
-    const straightShots = currentData.length - leftShots - rightShots;
-    const straightPercent = ((straightShots / currentData.length) * 100).toFixed(0);
+    if (filteredCurrentData.length === 0) {
+        sessionElements.dispersionStats.innerHTML = '<div class="no-data-message">No data for selected club</div>';
+        return;
+    }
+
+    const leftShots = filteredCurrentData.filter(row => (row['Side Carry'] || 0) < -5).length;
+    const rightShots = filteredCurrentData.filter(row => (row['Side Carry'] || 0) > 5).length;
+    const straightShots = filteredCurrentData.length - leftShots - rightShots;
+    const straightPercent = ((straightShots / filteredCurrentData.length) * 100).toFixed(0);
 
     sessionElements.dispersionStats.innerHTML = `
         <div class="dispersion-stat-card">
@@ -2054,7 +2063,7 @@ function updateDispersionChart(currentData, comparisonData) {
         <div class="dispersion-stat-card">
             <div class="stat-value">${straightPercent}%</div>
             <div class="stat-label">Shots Within 5yds</div>
-            <div class="stat-detail" style="font-size: 0.7rem; color: var(--text-secondary);">${straightShots} of ${currentData.length} shots</div>
+            <div class="stat-detail" style="font-size: 0.7rem; color: var(--text-secondary);">${straightShots} of ${filteredCurrentData.length} shots</div>
         </div>
         <div class="dispersion-stat-card">
             <div class="stat-value">${leftShots} / ${rightShots}</div>
@@ -2068,7 +2077,7 @@ function updateQualityMetrics(currentData, comparisonData) {
     if (!sessionElements.qualityMetrics) return;
 
     // Filter by selected club if not "all"
-    const selectedClub = sessionAnalysisState.qualityClub;
+    const selectedClub = sessionAnalysisState.selectedClub;
     let filteredCurrentData = currentData;
     let filteredComparisonData = comparisonData;
 
@@ -2078,7 +2087,7 @@ function updateQualityMetrics(currentData, comparisonData) {
     }
 
     if (filteredCurrentData.length === 0) {
-        sessionElements.qualityMetrics.innerHTML = '<div class="no-data-message">No data available for selected club</div>';
+        sessionElements.qualityMetrics.innerHTML = '<div class="no-data-message">No data available for selected club in this session</div>';
         return;
     }
 
@@ -2172,7 +2181,7 @@ function updateTrendsChart() {
     }
 
     const sessions = getUniqueSessions().reverse(); // Oldest first for trends
-    const selectedClub = sessionAnalysisState.trendsClub;
+    const selectedClub = sessionAnalysisState.selectedClub;
 
     const sessionMetrics = sessions.map(session => {
         let data = getSessionData(session);
@@ -2293,19 +2302,6 @@ function updateTrendsChart() {
     });
 }
 
-// Helper function to update only Quality Metrics (when club filter changes)
-function updateQualityMetricsOnly() {
-    if (!sessionAnalysisState.currentSession) return;
-    const currentData = getSessionData(sessionAnalysisState.currentSession);
-    const comparisonData = getComparisonData(sessionAnalysisState.currentSession);
-    updateQualityMetrics(currentData, comparisonData);
-}
-
-// Helper function to update only Trends Chart (when club filter changes)
-function updateTrendsChartOnly() {
-    updateTrendsChart();
-}
-
 // Main function to update Session Analysis
 function updateSessionAnalysis() {
     if (!sessionAnalysisState.currentSession || state.rawData.length === 0) return;
@@ -2316,8 +2312,8 @@ function updateSessionAnalysis() {
     const currentMetrics = calculateSessionMetrics(currentData);
     const comparisonMetrics = calculateSessionMetrics(comparisonData);
 
-    // Populate club selects for quality and trends filters
-    populateClubSelects();
+    // Populate club filter dropdown
+    populateClubSelect();
 
     updateSessionSummaryCards(currentMetrics, comparisonMetrics);
     updateClubAnalysis(currentData, comparisonData);
