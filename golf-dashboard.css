@@ -1638,6 +1638,58 @@ body.mobile-view .date-range-info {
     color: var(--text-secondary);
 }
 
+/* Section Header with Inline Filter */
+.section-header-with-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.section-header-with-filter h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.2rem;
+}
+
+.club-filter-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.club-filter-inline label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.club-select-inline {
+    background: var(--background-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    min-width: 120px;
+}
+
+.club-select-inline:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* No data message */
+.no-data-message {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 40px 20px;
+    font-style: italic;
+    grid-column: 1 / -1;
+}
+
 /* Trends Section */
 .trends-section {
     margin-bottom: 20px;

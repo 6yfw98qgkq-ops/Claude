@@ -1556,7 +1556,9 @@ const sessionAnalysisState = {
     currentSession: null,
     comparisonPeriod: 5,
     dispersionChart: null,
-    trendsChart: null
+    trendsChart: null,
+    qualityClub: 'all',
+    trendsClub: 'all'
 };
 
 // Session Analysis DOM Elements
@@ -1571,7 +1573,9 @@ const sessionElements = {
     dispersionChart: null,
     dispersionStats: null,
     qualityMetrics: null,
-    trendsChart: null
+    trendsChart: null,
+    qualityClubSelect: null,
+    trendsClubSelect: null
 };
 
 // Initialize Session Analysis DOM Elements
@@ -1587,6 +1591,8 @@ function initSessionAnalysisElements() {
     sessionElements.dispersionStats = document.getElementById('dispersionStats');
     sessionElements.qualityMetrics = document.getElementById('qualityMetrics');
     sessionElements.trendsChart = document.getElementById('trendsChart');
+    sessionElements.qualityClubSelect = document.getElementById('qualityClubSelect');
+    sessionElements.trendsClubSelect = document.getElementById('trendsClubSelect');
 }
 
 // Setup Session Analysis Event Listeners
@@ -1602,6 +1608,20 @@ function setupSessionAnalysisListeners() {
         sessionElements.comparisonPeriod.addEventListener('change', (e) => {
             sessionAnalysisState.comparisonPeriod = e.target.value;
             updateSessionAnalysis();
+        });
+    }
+
+    if (sessionElements.qualityClubSelect) {
+        sessionElements.qualityClubSelect.addEventListener('change', (e) => {
+            sessionAnalysisState.qualityClub = e.target.value;
+            updateQualityMetricsOnly();
+        });
+    }
+
+    if (sessionElements.trendsClubSelect) {
+        sessionElements.trendsClubSelect.addEventListener('change', (e) => {
+            sessionAnalysisState.trendsClub = e.target.value;
+            updateTrendsChartOnly();
         });
     }
 }
@@ -1626,6 +1646,38 @@ function populateSessionSelect() {
 
     if (sessions.length > 0) {
         sessionAnalysisState.currentSession = sessions[0];
+    }
+}
+
+// Populate club select dropdowns for quality and trends
+function populateClubSelects() {
+    const currentData = getSessionData(sessionAnalysisState.currentSession);
+    const clubs = [...new Set(currentData.map(row => row['Club Type']).filter(v => v))];
+    clubs.sort((a, b) => getClubSortOrder(a) - getClubSortOrder(b));
+
+    const clubOptions = '<option value="all">All Clubs</option>' +
+        clubs.map(club => `<option value="${club}">${formatClubType(club)}</option>`).join('');
+
+    if (sessionElements.qualityClubSelect) {
+        const currentQualityValue = sessionAnalysisState.qualityClub;
+        sessionElements.qualityClubSelect.innerHTML = clubOptions;
+        // Restore selection if still valid
+        if (currentQualityValue !== 'all' && clubs.includes(currentQualityValue)) {
+            sessionElements.qualityClubSelect.value = currentQualityValue;
+        } else {
+            sessionAnalysisState.qualityClub = 'all';
+        }
+    }
+
+    if (sessionElements.trendsClubSelect) {
+        const currentTrendsValue = sessionAnalysisState.trendsClub;
+        sessionElements.trendsClubSelect.innerHTML = clubOptions;
+        // Restore selection if still valid
+        if (currentTrendsValue !== 'all' && clubs.includes(currentTrendsValue)) {
+            sessionElements.trendsClubSelect.value = currentTrendsValue;
+        } else {
+            sessionAnalysisState.trendsClub = 'all';
+        }
     }
 }
 
@@ -2011,12 +2063,27 @@ function updateDispersionChart(currentData, comparisonData) {
     `;
 }
 
-// Update Quality Metrics
+// Update Quality Metrics (filtered by selected club)
 function updateQualityMetrics(currentData, comparisonData) {
     if (!sessionElements.qualityMetrics) return;
 
-    const currentMetrics = calculateSessionMetrics(currentData);
-    const comparisonMetrics = calculateSessionMetrics(comparisonData);
+    // Filter by selected club if not "all"
+    const selectedClub = sessionAnalysisState.qualityClub;
+    let filteredCurrentData = currentData;
+    let filteredComparisonData = comparisonData;
+
+    if (selectedClub !== 'all') {
+        filteredCurrentData = currentData.filter(row => row['Club Type'] === selectedClub);
+        filteredComparisonData = comparisonData.filter(row => row['Club Type'] === selectedClub);
+    }
+
+    if (filteredCurrentData.length === 0) {
+        sessionElements.qualityMetrics.innerHTML = '<div class="no-data-message">No data available for selected club</div>';
+        return;
+    }
+
+    const currentMetrics = calculateSessionMetrics(filteredCurrentData);
+    const comparisonMetrics = calculateSessionMetrics(filteredComparisonData);
 
     // Calculate quality indicators
     const smashFactorRating = currentMetrics.avgSmashFactor >= 1.45 ? 'excellent' :
@@ -2094,7 +2161,7 @@ function updateQualityMetrics(currentData, comparisonData) {
     `;
 }
 
-// Update Trends Chart
+// Update Trends Chart (filtered by selected club)
 function updateTrendsChart() {
     if (!sessionElements.trendsChart) return;
 
@@ -2105,14 +2172,30 @@ function updateTrendsChart() {
     }
 
     const sessions = getUniqueSessions().reverse(); // Oldest first for trends
+    const selectedClub = sessionAnalysisState.trendsClub;
 
     const sessionMetrics = sessions.map(session => {
-        const data = getSessionData(session);
+        let data = getSessionData(session);
+        // Filter by selected club if not "all"
+        if (selectedClub !== 'all') {
+            data = data.filter(row => row['Club Type'] === selectedClub);
+        }
         return {
             date: session,
+            shotCount: data.length,
             ...calculateSessionMetrics(data)
         };
-    });
+    }).filter(m => m.shotCount > 0); // Only include sessions with data for the selected club
+
+    if (sessionMetrics.length === 0) {
+        sessionAnalysisState.trendsChart = null;
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        return;
+    }
+
+    const chartTitle = selectedClub === 'all'
+        ? 'Performance Trends Across Sessions'
+        : `Performance Trends - ${formatClubType(selectedClub)}`;
 
     sessionAnalysisState.trendsChart = new Chart(ctx, {
         type: 'line',
@@ -2160,7 +2243,7 @@ function updateTrendsChart() {
                 },
                 title: {
                     display: true,
-                    text: 'Performance Trends Across Sessions',
+                    text: chartTitle,
                     color: '#ffffff',
                     font: { size: 14 }
                 }
@@ -2210,6 +2293,19 @@ function updateTrendsChart() {
     });
 }
 
+// Helper function to update only Quality Metrics (when club filter changes)
+function updateQualityMetricsOnly() {
+    if (!sessionAnalysisState.currentSession) return;
+    const currentData = getSessionData(sessionAnalysisState.currentSession);
+    const comparisonData = getComparisonData(sessionAnalysisState.currentSession);
+    updateQualityMetrics(currentData, comparisonData);
+}
+
+// Helper function to update only Trends Chart (when club filter changes)
+function updateTrendsChartOnly() {
+    updateTrendsChart();
+}
+
 // Main function to update Session Analysis
 function updateSessionAnalysis() {
     if (!sessionAnalysisState.currentSession || state.rawData.length === 0) return;
@@ -2219,6 +2315,9 @@ function updateSessionAnalysis() {
 
     const currentMetrics = calculateSessionMetrics(currentData);
     const comparisonMetrics = calculateSessionMetrics(comparisonData);
+
+    // Populate club selects for quality and trends filters
+    populateClubSelects();
 
     updateSessionSummaryCards(currentMetrics, comparisonMetrics);
     updateClubAnalysis(currentData, comparisonData);
